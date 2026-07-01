@@ -292,6 +292,15 @@ const calcularCuota = (alumno, periodoId, anio, ctx) => {
   };
 };
 
+// Campos obligatorios que puede faltarle a un alumno (celular, curso, fecha de nacimiento)
+const datosFaltantes = (alumno) => {
+  const faltan = [];
+  if (!alumno.celular) faltan.push('celular');
+  if (!alumno.cursoId) faltan.push('curso');
+  if (!alumno.fechaNacimiento) faltan.push('fecha de nacimiento');
+  return faltan;
+};
+
 // Verifica si una cuota fue anulada (alumno no debe ese periodo, ej: empezó más tarde)
 const esCuotaAnulada = (alumno, periodoId, anio) => {
   return (alumno.cuotasAnuladas || []).includes(`${periodoId}-${anio}`);
@@ -1759,20 +1768,25 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
 function AlumnosTab({ data, update }) {
   const [subTab, setSubTab] = useState('lista'); // 'lista' | 'grupos'
   const [editing, setEditing] = useState(null);
+  const [completando, setCompletando] = useState(null);
   const [query, setQuery] = useState('');
   const [filtroCurso, setFiltroCurso] = useState('todos');
   const [mostrarInactivos, setMostrarInactivos] = useState(false);
+  const [soloIncompletos, setSoloIncompletos] = useState(false);
+
+  const incompletos = useMemo(() => data.alumnos.filter(a => a.activo && datosFaltantes(a).length > 0), [data.alumnos]);
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
     return data.alumnos.filter(a => {
       if (!mostrarInactivos && !a.activo) return false;
+      if (soloIncompletos && incompletos.length > 0 && datosFaltantes(a).length === 0) return false;
       if (filtroCurso === 'sin-curso' && a.cursoId) return false;
       if (filtroCurso !== 'todos' && filtroCurso !== 'sin-curso' && a.cursoId !== filtroCurso) return false;
       if (q && !(a.nombre + ' ' + a.apellido + ' ' + a.dni).toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [data.alumnos, query, filtroCurso, mostrarInactivos]);
+  }, [data.alumnos, query, filtroCurso, mostrarInactivos, soloIncompletos]);
 
   const conteoPorCurso = useMemo(() => {
     const c = {};
@@ -1862,6 +1876,11 @@ function AlumnosTab({ data, update }) {
                   )}
                 </select>
               </div>
+              {incompletos.length > 0 && (
+                <FilterChip active={soloIncompletos} onClick={() => setSoloIncompletos(!soloIncompletos)}>
+                  <span className="flex items-center gap-1.5"><AlertCircle size={12} /> Faltan datos · {incompletos.length}</span>
+                </FilterChip>
+              )}
               <label className="ml-auto text-xs text-stone-500 flex items-center gap-1.5 cursor-pointer">
                 <input type="checkbox" checked={mostrarInactivos} onChange={e => setMostrarInactivos(e.target.checked)} className="rounded" />
                 Mostrar inactivos
@@ -1881,6 +1900,7 @@ function AlumnosTab({ data, update }) {
                 {filtered.map(a => {
                   const curso = data.cursos.find(c => c.id === a.cursoId);
                   const grupo = data.gruposFamiliares.find(g => g.id === a.grupoFamiliarId);
+                  const faltantes = datosFaltantes(a);
                   return (
                     <div key={a.id} className={`flex items-center gap-3 px-5 py-3 hover:bg-stone-50 ${!a.activo ? 'opacity-50' : ''}`}>
                       <Avatar alumno={a} />
@@ -1894,6 +1914,14 @@ function AlumnosTab({ data, update }) {
                           {curso?.nombre || 'Sin curso'} · {a.horarioCurso || (a.dia ? `${a.dia} ${a.horario || ''}` : 'Sin horario')} · DNI {a.dni}
                           {a.contactoNombre && <> · {a.contactoNombre}</>}
                         </div>
+                        {faltantes.length > 0 && (
+                          <button
+                            onClick={() => setCompletando(a)}
+                            className="mt-1 text-xs px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-full hover:bg-amber-100 flex items-center gap-1 w-fit"
+                          >
+                            <AlertCircle size={11} /> Falta {faltantes.join(', ')} · completar
+                          </button>
+                        )}
                       </div>
                       <button onClick={() => setEditing(a)} className="p-2 text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-lg">
                         <Edit2 size={16} />
@@ -1921,6 +1949,15 @@ function AlumnosTab({ data, update }) {
               update={update}
               onSave={saveAlumno}
               onClose={() => setEditing(null)}
+            />
+          )}
+
+          {completando && (
+            <QuickCompleteModal
+              alumno={completando}
+              data={data}
+              onSave={(cambios) => { saveAlumno({ ...completando, ...cambios }); setCompletando(null); }}
+              onClose={() => setCompletando(null)}
             />
           )}
         </>
@@ -2355,6 +2392,53 @@ function AlumnoForm({ alumno, data, update, onSave, onClose }) {
             >
               Guardar
             </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Modal chico para completar solo los datos que le faltan a un alumno,
+// sin abrir el formulario completo.
+function QuickCompleteModal({ alumno, data, onSave, onClose }) {
+  const faltantes = datosFaltantes(alumno);
+  const [celular, setCelular] = useState(alumno.celular || '');
+  const [cursoId, setCursoId] = useState(alumno.cursoId || '');
+  const [fechaNacimiento, setFechaNacimiento] = useState(alumno.fechaNacimiento || '');
+
+  const guardar = () => onSave({ celular, cursoId, fechaNacimiento });
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl max-w-sm w-full">
+        <div className="border-b border-stone-200 px-6 py-4 flex items-center justify-between">
+          <h2 className="font-semibold">Completar datos — {fullName(alumno)}</h2>
+          <button onClick={onClose}><X size={20} /></button>
+        </div>
+        <div className="p-6 space-y-4">
+          {faltantes.includes('celular') && (
+            <Field label="Celular principal" value={celular} onChange={setCelular} hint="Sin 0 ni 15. Ej: 1145678901" />
+          )}
+          {faltantes.includes('curso') && (
+            <div>
+              <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Curso</label>
+              <select
+                value={cursoId}
+                onChange={e => setCursoId(e.target.value)}
+                className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 bg-white"
+              >
+                <option value="">— Sin asignar —</option>
+                {data.cursos.filter(c => c.activo).map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+              </select>
+            </div>
+          )}
+          {faltantes.includes('fecha de nacimiento') && (
+            <Field label="Fecha de nacimiento" type="date" value={fechaNacimiento} onChange={setFechaNacimiento} />
+          )}
+          <div className="flex gap-2 pt-2">
+            <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-lg border border-stone-200 hover:bg-stone-50 font-medium text-sm">Cancelar</button>
+            <button onClick={guardar} className="flex-1 px-4 py-2.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-medium text-sm">Guardar</button>
           </div>
         </div>
       </div>
