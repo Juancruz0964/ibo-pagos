@@ -247,8 +247,9 @@ const calcularCuota = (alumno, periodoId, anio, ctx) => {
     : Math.round(efectivoBase * (1 + recargoPct / 100));
 
   // Descuento por hermano — hermanos ordenados automáticamente por precio de cuota
-  // de mayor a menor. El más caro es posición 1 (sin descuento), el más barato
-  // ocupa la posición más alta y recibe el mayor descuento configurado.
+  // de mayor a menor. Es un único descuento por grupo familiar, que va siempre a
+  // la cuota más barata (último de la lista); el porcentaje depende de cuántos
+  // hermanos activos hay en total y no se acumula con ningún otro.
   let descuentoHermano = 0;
   if (alumno.grupoFamiliarId) {
     const hermanos = alumnos
@@ -260,10 +261,12 @@ const calcularCuota = (alumno, periodoId, anio, ctx) => {
       .sort((a, b) => b._precio - a._precio || a.id.localeCompare(b.id)); // descendente: más caro = posición 1
 
     const posicion = hermanos.findIndex(h => h.id === alumno.id) + 1;
-    const descuentos = [...(configuracion.descuentosHermanos || [])].sort((a, b) => a.posicion - b.posicion);
-    descuentos.forEach(d => {
-      if (posicion >= d.posicion) descuentoHermano = d.porcentaje;
-    });
+    if (posicion === hermanos.length && hermanos.length > 1) {
+      const descuentos = [...(configuracion.descuentosHermanos || [])].sort((a, b) => a.posicion - b.posicion);
+      descuentos.forEach(d => {
+        if (posicion >= d.posicion) descuentoHermano = d.porcentaje;
+      });
+    }
 
     if (descuentoHermano > 0) {
       efectivoFinal = Math.round(efectivoFinal * (1 - descuentoHermano / 100));
@@ -2313,9 +2316,11 @@ function GruposFamiliaresView({ data, update }) {
                         const cfg = data.configuracion;
                         // miembros está ordenado descendente (más caro = idx 0 = posición 1)
                         const posicion = idx + 1;
-                        const descuentos = [...(cfg.descuentosHermanos || [])].sort((x, y) => x.posicion - y.posicion);
                         let descPct = 0;
-                        descuentos.forEach(d => { if (posicion >= d.posicion) descPct = d.porcentaje; });
+                        if (posicion === miembros.length && miembros.length > 1) {
+                          const descuentos = [...(cfg.descuentosHermanos || [])].sort((x, y) => x.posicion - y.posicion);
+                          descuentos.forEach(d => { if (posicion >= d.posicion) descPct = d.porcentaje; });
+                        }
                         return (
                           <div key={a.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-stone-50 border border-stone-100">
                             <div className="w-6 h-6 rounded-full bg-stone-200 flex items-center justify-center text-xs font-bold text-stone-600 shrink-0">
@@ -2332,9 +2337,9 @@ function GruposFamiliaresView({ data, update }) {
                               )}
                               {descPct > 0 ? (
                                 <div className="text-xs font-semibold text-emerald-700">−{descPct}%</div>
-                              ) : idx === 0 ? (
+                              ) : (
                                 <div className="text-xs text-stone-400">sin descuento</div>
-                              ) : null}
+                              )}
                             </div>
                             <button
                               onClick={() => quitarAlumno(a.id)}
@@ -3456,7 +3461,7 @@ function ConfigTab({ data, update }) {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="font-semibold">Descuentos por hermanos</h2>
-            <p className="text-sm text-stone-500 mt-0.5">Definí qué porcentaje de descuento se aplica según la posición del hermano (ordenados automáticamente de cuota más cara a más barata).</p>
+            <p className="text-sm text-stone-500 mt-0.5">El descuento es único por grupo familiar y se aplica siempre a la cuota más barata (nunca se acumula con otra). El porcentaje depende de cuántos hermanos activos hay en total: definí acá el porcentaje según esa cantidad.</p>
           </div>
           <button
             onClick={() => {
@@ -3482,7 +3487,7 @@ function ConfigTab({ data, update }) {
                 <div key={realIdx} className="flex items-center gap-3 p-3 border border-stone-200 rounded-lg">
                   <div className="flex-1 grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs text-stone-500">Posición del hermano</label>
+                      <label className="text-xs text-stone-500">Cantidad de hermanos</label>
                       <input
                         type="number"
                         min="1"
