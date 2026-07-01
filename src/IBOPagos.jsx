@@ -105,7 +105,7 @@ const initialState = {
     plantillaWhatsApp: 'Hola {nombre}! Confirmamos el pago de {periodos} en {instituto} por {total} ({medio}). ¡Muchas gracias!',
     plantillaWhatsAppParcial: 'Hola {nombre}! Recibimos un pago parcial de {monto} ({medio}) para la cuota de {periodo} en {instituto}. Saldo pendiente: {saldo}. ¡Gracias!',
     plantillaWhatsAppSaldo: 'Hola {nombre}! Confirmamos el pago del saldo pendiente de {periodo} ({monto} en {medio}) en {instituto}. ¡Cuota saldada!',
-    plantillaWhatsAppCotizacion: 'Hola! El importe de {periodos} en {instituto} es:\n{detalle}\nTotal: {total} (efectivo) / {totalTransferencia} (transferencia o MP).'
+    plantillaWhatsAppCotizacion: 'Hola {nombre}! El importe de {periodos} en {instituto} es:\n{detalle}\nTotal: {total} (efectivo) / {totalTransferencia} (transferencia o MP).'
   }
 };
 
@@ -681,7 +681,7 @@ function PagosTab({ data, update }) {
         )}
 
         {showCalcularModal && (
-          <CalcularImporteModal data={data} selectedPeriodos={selectedPeriodos} onClose={() => setShowCalcularModal(false)} />
+          <CalcularImporteModal data={data} update={update} selectedPeriodos={selectedPeriodos} onClose={() => setShowCalcularModal(false)} />
         )}
 
         {showPaymentModal && (
@@ -760,7 +760,7 @@ function PagosTab({ data, update }) {
         )}
       </div>
 
-      {subView === 'deudores' && <DeudoresView data={data} />}
+      {subView === 'deudores' && <DeudoresView data={data} update={update} />}
 
       {subView === 'cobrar' && alumno && curso && (
         <>
@@ -805,7 +805,7 @@ function PagosTab({ data, update }) {
       )}
 
       {showCalcularModal && (
-        <CalcularImporteModal data={data} selectedPeriodos={selectedPeriodos} onClose={() => setShowCalcularModal(false)} />
+        <CalcularImporteModal data={data} update={update} selectedPeriodos={selectedPeriodos} onClose={() => setShowCalcularModal(false)} />
       )}
 
       {showPaymentModal && (
@@ -1179,7 +1179,7 @@ function FloatingPayBar({ count, onClick, onCalcular }) {
 // ============================================================
 // CALCULAR IMPORTE (cotización rápida por WhatsApp, sin registrar cobro)
 // ============================================================
-function CalcularImporteModal({ data, selectedPeriodos, onClose }) {
+function CalcularImporteModal({ data, update, selectedPeriodos, onClose }) {
   const cfg = data.configuracion;
 
   const lineas = selectedPeriodos
@@ -1210,14 +1210,18 @@ function CalcularImporteModal({ data, selectedPeriodos, onClose }) {
       .map(l => `${multi ? l.alumno.nombre + ' - ' : ''}${l.periodo.full} ${l.anio}: ${fmtMoney(l.calc.efectivo)}`)
       .join('\n');
     const template = cfg.plantillaWhatsAppCotizacion ||
-      'Hola! El importe de {periodos} en {instituto} es:\n{detalle}\nTotal: {total} (efectivo) / {totalTransferencia} (transferencia o MP).';
+      'Hola {nombre}! El importe de {periodos} en {instituto} es:\n{detalle}\nTotal: {total} (efectivo) / {totalTransferencia} (transferencia o MP).';
     return template
-      .replace('{nombre}', g.alumnos.map(a => a.nombre).join(' y '))
+      .replace('{nombre}', g.alumnos.map(a => a.contactoNombre || a.nombre).join(' y '))
       .replace('{periodos}', periodosTxt)
       .replace('{instituto}', cfg.nombreInstituto)
       .replace('{detalle}', detalle)
       .replace('{totalTransferencia}', fmtMoney(g.totalTransferencia))
       .replace('{total}', fmtMoney(g.totalEfectivo));
+  };
+
+  const guardarContacto = (alumnoId, nombreContacto) => {
+    update({ alumnos: data.alumnos.map(a => a.id === alumnoId ? { ...a, contactoNombre: nombreContacto } : a) });
   };
 
   const [copiadoIdx, setCopiadoIdx] = useState(null);
@@ -1275,6 +1279,13 @@ function CalcularImporteModal({ data, selectedPeriodos, onClose }) {
                 {!g.phone && (
                   <p className="text-xs text-amber-600">Sin celular cargado — copiá el mensaje para enviarlo manualmente.</p>
                 )}
+                {g.alumnos.filter(a => !a.contactoNombre).map(a => (
+                  <ContactoNombreInline
+                    key={a.id}
+                    label={`Falta el nombre de contacto de ${a.nombre}:`}
+                    onSave={(nombre) => guardarContacto(a.id, nombre)}
+                  />
+                ))}
               </div>
             );
           })}
@@ -1459,7 +1470,7 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
       const periodos = totalesItems.map(it => `${it.periodo.full} ${it.anio}`).join(', ');
       const totalMonto = totalesItems.reduce((s, it) => s + it.monto, 0);
       partes.push(replaceVars(cfg.plantillaWhatsApp, {
-        nombre: alumno.nombre,
+        nombre: alumno.contactoNombre || alumno.nombre,
         periodos,
         instituto: inst,
         total: fmtMoney(totalMonto),
@@ -1469,7 +1480,7 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
 
     parciales.forEach(it => {
       partes.push(replaceVars(cfg.plantillaWhatsAppParcial || 'Hola {nombre}! Recibimos un pago parcial de {monto} ({medio}) para la cuota de {periodo} en {instituto}. Saldo pendiente: {saldo}. ¡Gracias!', {
-        nombre: alumno.nombre,
+        nombre: alumno.contactoNombre || alumno.nombre,
         monto: fmtMoney(it.monto),
         periodo: `${it.periodo.full} ${it.anio}`,
         instituto: inst,
@@ -1480,7 +1491,7 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
 
     saldos.forEach(it => {
       partes.push(replaceVars(cfg.plantillaWhatsAppSaldo || 'Hola {nombre}! Confirmamos el pago del saldo pendiente de {periodo} ({monto} en {medio}) en {instituto}. ¡Cuota saldada!', {
-        nombre: alumno.nombre,
+        nombre: alumno.contactoNombre || alumno.nombre,
         monto: fmtMoney(it.monto),
         periodo: `${it.periodo.full} ${it.anio}`,
         instituto: inst,
@@ -1541,6 +1552,19 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
     setStep('whatsapp');
   };
 
+  // Guarda el nombre de contacto de un alumno y regenera el mensaje de su grupo
+  const guardarContactoYRegenerar = (idx, alumnoId, nombreContacto) => {
+    update({ alumnos: data.alumnos.map(a => a.id === alumnoId ? { ...a, contactoNombre: nombreContacto } : a) });
+    setWaGroups(prev => prev.map((g, i) => {
+      if (i !== idx) return g;
+      const alumnosPatched = g.alumnos.map(a => a.id === alumnoId ? { ...a, contactoNombre: nombreContacto } : a);
+      const mensaje = alumnosPatched.length > 1
+        ? generarMensajeAgrupado(alumnosPatched, g.items, g.total, usaMixto, distribuciones)
+        : generarMensajeIndividual(alumnosPatched[0], g.items, usaMixto, distribuciones);
+      return { ...g, alumnos: alumnosPatched, mensaje };
+    }));
+  };
+
   const sendWA = (idx) => {
     const g = waGroups[idx];
     const url = `https://wa.me/${g.phone}?text=${encodeURIComponent(g.mensaje)}`;
@@ -1598,6 +1622,13 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
                       <summary className="text-xs text-stone-500 cursor-pointer hover:text-stone-800">Ver mensaje</summary>
                       <pre className="mt-2 text-xs bg-stone-50 rounded p-2 whitespace-pre-wrap font-sans text-stone-700">{g.mensaje}</pre>
                     </details>
+                    {g.alumnos.filter(a => !a.contactoNombre).map(a => (
+                      <ContactoNombreInline
+                        key={a.id}
+                        label={`Falta el nombre de contacto de ${a.nombre}:`}
+                        onSave={(nombre) => guardarContactoYRegenerar(idx, a.id, nombre)}
+                      />
+                    ))}
                   </div>
                 ))}
               </>
@@ -2665,7 +2696,7 @@ function AlumnoCuotasModal({ alumno, data, update, onClose, onEdit }) {
       </div>
 
       {showCalcularModal && (
-        <CalcularImporteModal data={data} selectedPeriodos={selectedPeriodos} onClose={() => setShowCalcularModal(false)} />
+        <CalcularImporteModal data={data} update={update} selectedPeriodos={selectedPeriodos} onClose={() => setShowCalcularModal(false)} />
       )}
 
       {showPaymentModal && (
@@ -2692,6 +2723,38 @@ function AlumnoCuotasModal({ alumno, data, update, onClose, onEdit }) {
 
 // Modal chico para completar solo los datos que le faltan a un alumno,
 // sin abrir el formulario completo.
+// Prompt chico e inline para cargar un dato faltante (ej: nombre de contacto)
+// en el momento en que se necesita, sin frenar lo que se está haciendo.
+function ContactoNombreInline({ label, onSave }) {
+  const [valor, setValor] = useState('');
+  const [guardado, setGuardado] = useState(false);
+
+  const guardar = () => {
+    if (!valor.trim()) return;
+    onSave(valor.trim());
+    setGuardado(true);
+  };
+
+  if (guardado) return <p className="text-xs text-emerald-700 mt-2">✓ Guardado</p>;
+
+  return (
+    <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">
+      <span className="text-xs text-amber-700 whitespace-nowrap">{label}</span>
+      <input
+        type="text"
+        value={valor}
+        onChange={e => setValor(e.target.value)}
+        placeholder="Nombre del padre/madre/tutor"
+        className="flex-1 min-w-0 px-2 py-1 rounded border border-amber-300 text-sm"
+        onKeyDown={e => { if (e.key === 'Enter') guardar(); }}
+      />
+      <button onClick={guardar} className="px-2 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-medium whitespace-nowrap">
+        Guardar
+      </button>
+    </div>
+  );
+}
+
 function QuickCompleteModal({ alumno, data, onSave, onClose }) {
   const faltantes = datosFaltantes(alumno);
   const [celular, setCelular] = useState(alumno.celular || '');
@@ -3558,7 +3621,7 @@ function ConfigTab({ data, update }) {
 // ============================================================
 // DEUDORES VIEW
 // ============================================================
-function DeudoresView({ data }) {
+function DeudoresView({ data, update }) {
   const mensualPeriodos = PERIODOS.filter(p => p.tipo === 'MENSUAL');
   const mesActual = new Date().getMonth() + 1;
   const defaultPeriodo = mensualPeriodos.find(p => p.mes === mesActual)?.id || mensualPeriodos[0]?.id;
@@ -3598,9 +3661,13 @@ function DeudoresView({ data }) {
 
   const generarMensaje = (alumno) =>
     plantilla
-      .replace('{nombre}', alumno.nombre)
+      .replace('{nombre}', alumno.contactoNombre || alumno.nombre)
       .replace('{mes}', `${periodoObj?.full || ''} ${anio}`)
       .replace('{instituto}', data.configuracion.nombreInstituto);
+
+  const guardarContacto = (alumnoId, nombreContacto) => {
+    update({ alumnos: data.alumnos.map(a => a.id === alumnoId ? { ...a, contactoNombre: nombreContacto } : a) });
+  };
 
   const enviar = (alumno) => {
     const phone = formatPhoneForWA(alumno.celular);
@@ -3684,26 +3751,34 @@ function DeudoresView({ data }) {
               {alumnos.map(a => {
                 const enviado = enviados.has(`${a.id}-${periodo}-${anio}`);
                 return (
-                  <div key={a.id} className={`flex items-center gap-3 px-5 py-3 ${enviado ? 'bg-emerald-50/40' : 'hover:bg-stone-50'}`}>
-                    <Avatar alumno={a} size="sm" />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-stone-900">{fullName(a)}</div>
-                      <div className="text-xs text-stone-500">{a.celular || 'Sin celular'}</div>
+                  <div key={a.id} className={`px-5 py-3 ${enviado ? 'bg-emerald-50/40' : 'hover:bg-stone-50'}`}>
+                    <div className="flex items-center gap-3">
+                      <Avatar alumno={a} size="sm" />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-stone-900">{fullName(a)}</div>
+                        <div className="text-xs text-stone-500">{a.celular || 'Sin celular'}</div>
+                      </div>
+                      {a.celular ? (
+                        <button
+                          onClick={() => enviar(a)}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap ${
+                            enviado
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : 'bg-emerald-700 hover:bg-emerald-800 text-white'
+                          }`}
+                        >
+                          <MessageCircle size={14} />
+                          {enviado ? 'Enviado' : 'Recordar'}
+                        </button>
+                      ) : (
+                        <span className="text-xs text-stone-400 px-3 py-1.5 border border-dashed border-stone-200 rounded-lg">Sin celular</span>
+                      )}
                     </div>
-                    {a.celular ? (
-                      <button
-                        onClick={() => enviar(a)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap ${
-                          enviado
-                            ? 'bg-emerald-100 text-emerald-700'
-                            : 'bg-emerald-700 hover:bg-emerald-800 text-white'
-                        }`}
-                      >
-                        <MessageCircle size={14} />
-                        {enviado ? 'Enviado' : 'Recordar'}
-                      </button>
-                    ) : (
-                      <span className="text-xs text-stone-400 px-3 py-1.5 border border-dashed border-stone-200 rounded-lg">Sin celular</span>
+                    {!a.contactoNombre && (
+                      <ContactoNombreInline
+                        label="Falta el nombre de contacto:"
+                        onSave={(nombre) => guardarContacto(a.id, nombre)}
+                      />
                     )}
                   </div>
                 );
