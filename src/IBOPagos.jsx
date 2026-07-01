@@ -2,9 +2,8 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Search, Plus, X, Edit2, Trash2, Users, BookOpen, Settings, CreditCard,
   Check, MessageCircle, ChevronRight, Download, Upload, AlertCircle,
-  Calendar, DollarSign, UserPlus, History, Tag, Home
+  Calendar, DollarSign, UserPlus, History, Tag, Home, Ban, Calculator
 } from 'lucide-react';
-import datosIniciales from '../ibo_datos_importacion.json';
 
 // ============================================================
 // STORAGE LAYER
@@ -105,7 +104,8 @@ const initialState = {
     ],
     plantillaWhatsApp: 'Hola {nombre}! Confirmamos el pago de {periodos} en {instituto} por {total} ({medio}). ¡Muchas gracias!',
     plantillaWhatsAppParcial: 'Hola {nombre}! Recibimos un pago parcial de {monto} ({medio}) para la cuota de {periodo} en {instituto}. Saldo pendiente: {saldo}. ¡Gracias!',
-    plantillaWhatsAppSaldo: 'Hola {nombre}! Confirmamos el pago del saldo pendiente de {periodo} ({monto} en {medio}) en {instituto}. ¡Cuota saldada!'
+    plantillaWhatsAppSaldo: 'Hola {nombre}! Confirmamos el pago del saldo pendiente de {periodo} ({monto} en {medio}) en {instituto}. ¡Cuota saldada!',
+    plantillaWhatsAppCotizacion: 'Hola! El importe de {periodos} en {instituto} es:\n{detalle}\nTotal: {total} (efectivo) / {totalTransferencia} (transferencia o MP).'
   }
 };
 
@@ -246,8 +246,9 @@ const calcularCuota = (alumno, periodoId, anio, ctx) => {
     : Math.round(efectivoBase * (1 + recargoPct / 100));
 
   // Descuento por hermano — hermanos ordenados automáticamente por precio de cuota
-  // de mayor a menor. El más caro es posición 1 (sin descuento), el más barato
-  // ocupa la posición más alta y recibe el mayor descuento configurado.
+  // de mayor a menor. Es un único descuento por grupo familiar, que va siempre a
+  // la cuota más barata (último de la lista); el porcentaje depende de cuántos
+  // hermanos activos hay en total y no se acumula con ningún otro.
   let descuentoHermano = 0;
   if (alumno.grupoFamiliarId) {
     const hermanos = alumnos
@@ -259,10 +260,12 @@ const calcularCuota = (alumno, periodoId, anio, ctx) => {
       .sort((a, b) => b._precio - a._precio || a.id.localeCompare(b.id)); // descendente: más caro = posición 1
 
     const posicion = hermanos.findIndex(h => h.id === alumno.id) + 1;
-    const descuentos = [...(configuracion.descuentosHermanos || [])].sort((a, b) => a.posicion - b.posicion);
-    descuentos.forEach(d => {
-      if (posicion >= d.posicion) descuentoHermano = d.porcentaje;
-    });
+    if (posicion === hermanos.length && hermanos.length > 1) {
+      const descuentos = [...(configuracion.descuentosHermanos || [])].sort((a, b) => a.posicion - b.posicion);
+      descuentos.forEach(d => {
+        if (posicion >= d.posicion) descuentoHermano = d.porcentaje;
+      });
+    }
 
     if (descuentoHermano > 0) {
       efectivoFinal = Math.round(efectivoFinal * (1 - descuentoHermano / 100));
@@ -290,6 +293,20 @@ const calcularCuota = (alumno, periodoId, anio, ctx) => {
     promo: promo ? promo.montoDescuento : 0,
     base: { efectivo: precio.efectivo, transferencia: precio.transferencia }
   };
+};
+
+// Campos obligatorios que puede faltarle a un alumno (celular, curso, fecha de nacimiento)
+const datosFaltantes = (alumno) => {
+  const faltan = [];
+  if (!alumno.celular) faltan.push('celular');
+  if (!alumno.cursoId) faltan.push('curso');
+  if (!alumno.fechaNacimiento) faltan.push('fecha de nacimiento');
+  return faltan;
+};
+
+// Verifica si una cuota fue anulada (alumno no debe ese periodo, ej: empezó más tarde)
+const esCuotaAnulada = (alumno, periodoId, anio) => {
+  return (alumno.cuotasAnuladas || []).includes(`${periodoId}-${anio}`);
 };
 
 // Verifica si un periodo está pagado (mantenida por compatibilidad)
@@ -333,21 +350,11 @@ export default function App() {
   useEffect(() => {
     storage.get('ibo_data').then(saved => {
       if (saved) {
-        // Migración: aplicar mesesExcluidos desde el JSON si el curso guardado no lo tiene
-        const cursosActualizados = (saved.cursos || []).map(c => {
-          if (!c.mesesExcluidos) {
-            const jsonCurso = datosIniciales.cursos?.find(jc => jc.id === c.id);
-            if (jsonCurso?.mesesExcluidos) return { ...c, mesesExcluidos: jsonCurso.mesesExcluidos };
-            return { ...c, mesesExcluidos: [] };
-          }
-          return c;
-        });
+        // Migración: los cursos guardados sin mesesExcluidos pasan a tener la lista vacía
+        const cursosActualizados = (saved.cursos || []).map(c =>
+          c.mesesExcluidos ? c : { ...c, mesesExcluidos: [] }
+        );
         setData({ ...initialState, ...saved, cursos: cursosActualizados });
-      } else {
-        const { _meta, ...rest } = datosIniciales;
-        setData(rest);
-        const t = _meta.totales;
-        setImportMessage(`Se importaron ${t.alumnos} alumnos, ${t.pagos} pagos, ${t.cursos} cursos y ${t.grupos_familiares} grupos familiares.`);
       }
       setLoaded(true);
     });
@@ -494,6 +501,7 @@ function PagosTab({ data, update }) {
   const [multiMode, setMultiMode] = useState(false);
   const [multiAlumnos, setMultiAlumnos] = useState([]); // [{alumnoId, periodos: [periodoId]}]
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showCalcularModal, setShowCalcularModal] = useState(false);
   const [pagoView, setPagoView] = useState(null); // {alumno, periodo, anio, pago}
   const [subView, setSubView] = useState('cobrar'); // 'cobrar' | 'deudores'
   const [editingAlumno, setEditingAlumno] = useState(null);
@@ -652,6 +660,7 @@ function PagosTab({ data, update }) {
               alumno={al}
               curso={cur}
               data={data}
+              update={update}
               anio={anio}
               isSelected={(pid) => isPeriodoSelected(al.id, pid)}
               togglePeriodo={(pid) => togglePeriodo(al.id, pid)}
@@ -667,7 +676,12 @@ function PagosTab({ data, update }) {
           <FloatingPayBar
             count={totalSeleccionado}
             onClick={() => setShowPaymentModal(true)}
+            onCalcular={() => setShowCalcularModal(true)}
           />
+        )}
+
+        {showCalcularModal && (
+          <CalcularImporteModal data={data} selectedPeriodos={selectedPeriodos} onClose={() => setShowCalcularModal(false)} />
         )}
 
         {showPaymentModal && (
@@ -764,6 +778,7 @@ function PagosTab({ data, update }) {
             alumno={alumno}
             curso={curso}
             data={data}
+            update={update}
             anio={anio}
             isSelected={(pid) => isPeriodoSelected(alumno.id, pid)}
             togglePeriodo={(pid) => togglePeriodo(alumno.id, pid)}
@@ -782,7 +797,15 @@ function PagosTab({ data, update }) {
       )}
 
       {totalSeleccionado > 0 && (
-        <FloatingPayBar count={totalSeleccionado} onClick={() => setShowPaymentModal(true)} />
+        <FloatingPayBar
+          count={totalSeleccionado}
+          onClick={() => setShowPaymentModal(true)}
+          onCalcular={() => setShowCalcularModal(true)}
+        />
+      )}
+
+      {showCalcularModal && (
+        <CalcularImporteModal data={data} selectedPeriodos={selectedPeriodos} onClose={() => setShowCalcularModal(false)} />
       )}
 
       {showPaymentModal && (
@@ -883,7 +906,10 @@ function PagoDetalleModal({ alumno, periodo, anio, estadoCuota, onClose, onDelet
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium">{fmtMoney(monto)}</div>
-                        <div className="text-xs text-stone-500">{fmtFecha(pago.fechaPago)}{idx === 0 && estadoCuota.pagos.length > 1 ? ' · 1° pago' : ''}</div>
+                        <div className="text-xs text-stone-500">
+                          {fmtFecha(pago.fechaPago)} · {pago.metodo === 'transferencia' ? 'Transferencia/MP' : 'Efectivo'}
+                          {idx === 0 && estadoCuota.pagos.length > 1 ? ' · 1° pago' : ''}
+                        </div>
                       </div>
                       {!confirmando && (
                         <button
@@ -971,12 +997,20 @@ function SearchBox({ query, setQuery, placeholder, resultados, onSelect, classNa
 // ============================================================
 // ALUMNO PAGO CARD (con grilla de meses)
 // ============================================================
-function AlumnoPagoCard({ alumno, curso, data, anio, isSelected, togglePeriodo, onVerPago, onChange, onRemove, showRemove, onEdit }) {
-  const periodosAplicables = PERIODOS.filter(p => !(curso?.mesesExcluidos || []).includes(p.id));
+function AlumnoPagoCard({ alumno, curso, data, update, anio, isSelected, togglePeriodo, onVerPago, onChange, onRemove, showRemove, onEdit }) {
+  const periodosAplicables = PERIODOS.filter(p => !(curso?.mesesExcluidos || []).includes(p.id) && !esCuotaAnulada(alumno, p.id, anio));
   const pagados = periodosAplicables.filter(p => obtenerEstadoCuota(data.pagos, alumno.id, p.id, anio).estado === 'pagado').length;
   const parciales = periodosAplicables.filter(p => obtenerEstadoCuota(data.pagos, alumno.id, p.id, anio).estado === 'parcial').length;
   const total = periodosAplicables.length;
-  const todosPagados = pagados === total;
+  const todosPagados = total > 0 && pagados === total;
+
+  const toggleAnulada = (periodoId) => {
+    if (!update) return;
+    const key = `${periodoId}-${anio}`;
+    const actuales = alumno.cuotasAnuladas || [];
+    const nuevas = actuales.includes(key) ? actuales.filter(k => k !== key) : [...actuales, key];
+    update({ alumnos: data.alumnos.map(a => a.id === alumno.id ? { ...a, cuotasAnuladas: nuevas } : a) });
+  };
 
   return (
     <div className="bg-white rounded-2xl border border-stone-200 shadow-sm hover:shadow-md transition-shadow duration-200 p-5">
@@ -1026,6 +1060,20 @@ function AlumnoPagoCard({ alumno, curso, data, anio, isSelected, togglePeriodo, 
               </div>
             );
           }
+          const anulada = esCuotaAnulada(alumno, p.id, anio);
+          if (anulada) {
+            return (
+              <button
+                key={p.id}
+                onClick={() => update && confirm(`¿Reactivar ${p.full} ${anio} para ${alumno.nombre}? Volverá a figurar como pendiente.`) && toggleAnulada(p.id)}
+                title={`${p.full} — no corresponde (click para reactivar)`}
+                className="flex flex-col items-center justify-center py-3 rounded-xl border border-dashed border-stone-200 text-[11px] font-semibold tracking-wide text-stone-400 bg-stone-50/60 hover:bg-stone-100"
+              >
+                <span>{p.label}</span>
+                <span className="text-[9px] font-normal">N/A</span>
+              </button>
+            );
+          }
           const estadoCuota = obtenerEstadoCuota(data.pagos, alumno.id, p.id, anio);
           const estado = estadoCuota.estado;
           const seleccionado = isSelected(p.id);
@@ -1056,10 +1104,28 @@ function AlumnoPagoCard({ alumno, curso, data, anio, isSelected, togglePeriodo, 
               {estado === 'parcial' && (
                 <span className="absolute bottom-0 left-0 right-0 h-1 bg-amber-400/70 rounded-b-xl" />
               )}
+              {estado === 'pendiente' && update && (
+                <span
+                  role="button"
+                  title="Marcar que esta cuota no corresponde (ej: alumno que empezó más tarde)"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (confirm(`¿Marcar ${p.full} ${anio} como "no corresponde" para ${alumno.nombre}?`)) {
+                      toggleAnulada(p.id);
+                    }
+                  }}
+                  className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-white border border-stone-300 text-stone-400 flex items-center justify-center opacity-60 hover:opacity-100 hover:text-red-500 hover:border-red-300"
+                >
+                  <Ban size={10} />
+                </span>
+              )}
             </button>
           );
         })}
       </div>
+      {update && (
+        <p className="text-[11px] text-stone-400 -mt-2 mb-3">El ⊘ en la esquina de una cuota pendiente la marca como "no corresponde".</p>
+      )}
 
       {total > 0 && (
         <div>
@@ -1086,9 +1152,18 @@ function AlumnoPagoCard({ alumno, curso, data, anio, isSelected, togglePeriodo, 
 // ============================================================
 // FLOATING PAY BAR
 // ============================================================
-function FloatingPayBar({ count, onClick }) {
+function FloatingPayBar({ count, onClick, onCalcular }) {
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30">
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2">
+      {onCalcular && (
+        <button
+          onClick={onCalcular}
+          className="bg-white border border-stone-300 text-stone-700 hover:bg-stone-50 px-4 py-3 rounded-full shadow-lg flex items-center gap-2 font-medium text-sm"
+        >
+          <Calculator size={16} />
+          Calcular importe
+        </button>
+      )}
       <button
         onClick={onClick}
         className="bg-emerald-700 hover:bg-emerald-800 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-3 font-medium"
@@ -1097,6 +1172,114 @@ function FloatingPayBar({ count, onClick }) {
         Cobrar {count} {count === 1 ? 'cuota' : 'cuotas'}
         <ChevronRight size={16} />
       </button>
+    </div>
+  );
+}
+
+// ============================================================
+// CALCULAR IMPORTE (cotización rápida por WhatsApp, sin registrar cobro)
+// ============================================================
+function CalcularImporteModal({ data, selectedPeriodos, onClose }) {
+  const cfg = data.configuracion;
+
+  const lineas = selectedPeriodos
+    .map(sp => {
+      const alumno = data.alumnos.find(a => a.id === sp.alumnoId);
+      const periodo = PERIODOS.find(p => p.id === sp.periodoId);
+      const calc = alumno ? calcularCuota(alumno, sp.periodoId, sp.anio, data) : null;
+      return { ...sp, alumno, periodo, calc };
+    })
+    .filter(l => l.alumno && l.periodo && l.calc && !l.calc.error);
+
+  const grupos = {};
+  lineas.forEach(l => {
+    const tel = formatPhoneForWA(l.alumno.celular);
+    const key = tel || `sin-celular-${l.alumno.id}`;
+    if (!grupos[key]) grupos[key] = { phone: tel, alumnos: [], lineas: [], totalEfectivo: 0, totalTransferencia: 0 };
+    if (!grupos[key].alumnos.find(a => a.id === l.alumno.id)) grupos[key].alumnos.push(l.alumno);
+    grupos[key].lineas.push(l);
+    grupos[key].totalEfectivo += l.calc.efectivo || 0;
+    grupos[key].totalTransferencia += l.calc.transferencia || 0;
+  });
+  const gruposArr = Object.values(grupos);
+
+  const generarMensaje = (g) => {
+    const multi = g.alumnos.length > 1;
+    const periodosTxt = [...new Set(g.lineas.map(l => `${l.periodo.full} ${l.anio}`))].join(', ');
+    const detalle = g.lineas
+      .map(l => `${multi ? l.alumno.nombre + ' - ' : ''}${l.periodo.full} ${l.anio}: ${fmtMoney(l.calc.efectivo)}`)
+      .join('\n');
+    const template = cfg.plantillaWhatsAppCotizacion ||
+      'Hola! El importe de {periodos} en {instituto} es:\n{detalle}\nTotal: {total} (efectivo) / {totalTransferencia} (transferencia o MP).';
+    return template
+      .replace('{nombre}', g.alumnos.map(a => a.nombre).join(' y '))
+      .replace('{periodos}', periodosTxt)
+      .replace('{instituto}', cfg.nombreInstituto)
+      .replace('{detalle}', detalle)
+      .replace('{totalTransferencia}', fmtMoney(g.totalTransferencia))
+      .replace('{total}', fmtMoney(g.totalEfectivo));
+  };
+
+  const [copiadoIdx, setCopiadoIdx] = useState(null);
+  const copiar = (idx, mensaje) => {
+    navigator.clipboard?.writeText(mensaje);
+    setCopiadoIdx(idx);
+    setTimeout(() => setCopiadoIdx(null), 2000);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-white rounded-2xl max-w-lg w-full my-8 max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white border-b border-stone-200 px-6 py-4 flex items-center justify-between">
+          <h2 className="font-semibold">Calcular importe</h2>
+          <button onClick={onClose}><X size={20} /></button>
+        </div>
+        <div className="p-6 space-y-4">
+          {gruposArr.length === 0 ? (
+            <p className="text-sm text-stone-400 text-center py-6">No hay cuotas seleccionadas.</p>
+          ) : gruposArr.map((g, idx) => {
+            const mensaje = generarMensaje(g);
+            return (
+              <div key={idx} className="border border-stone-200 rounded-xl p-4 space-y-3">
+                <div className="font-medium text-sm">{g.alumnos.map(a => fullName(a)).join(' y ')}</div>
+                <div className="space-y-1 text-sm">
+                  {g.lineas.map((l, i) => (
+                    <div key={i} className="flex justify-between text-stone-600">
+                      <span>{g.alumnos.length > 1 ? `${l.alumno.nombre} — ` : ''}{l.periodo.full} {l.anio}</span>
+                      <span className="font-medium text-stone-900">{fmtMoney(l.calc.efectivo)}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex justify-between text-sm pt-2 border-t border-stone-100 font-semibold">
+                  <span>Total (efectivo)</span>
+                  <span>{fmtMoney(g.totalEfectivo)}</span>
+                </div>
+                <div className="flex justify-between text-xs text-stone-500">
+                  <span>Total (transferencia/MP)</span>
+                  <span>{fmtMoney(g.totalTransferencia)}</span>
+                </div>
+                <textarea readOnly value={mensaje} rows={4} className="w-full px-3 py-2 rounded-lg border border-stone-200 text-xs text-stone-600 bg-stone-50" />
+                <div className="flex gap-2">
+                  <button onClick={() => copiar(idx, mensaje)} className="flex-1 px-3 py-2 rounded-lg border border-stone-200 text-sm hover:bg-stone-50">
+                    {copiadoIdx === idx ? 'Copiado ✓' : 'Copiar mensaje'}
+                  </button>
+                  {g.phone && (
+                    <button
+                      onClick={() => window.open(`https://wa.me/${g.phone}?text=${encodeURIComponent(mensaje)}`, '_blank')}
+                      className="flex-1 px-3 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm flex items-center justify-center gap-1.5"
+                    >
+                      <MessageCircle size={14} /> Enviar WhatsApp
+                    </button>
+                  )}
+                </div>
+                {!g.phone && (
+                  <p className="text-xs text-amber-600">Sin celular cargado — copiá el mensaje para enviarlo manualmente.</p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1712,20 +1895,27 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
 function AlumnosTab({ data, update }) {
   const [subTab, setSubTab] = useState('lista'); // 'lista' | 'grupos'
   const [editing, setEditing] = useState(null);
+  const [completando, setCompletando] = useState(null);
+  const [viendoCuotasId, setViendoCuotasId] = useState(null);
+  const viendoCuotas = data.alumnos.find(a => a.id === viendoCuotasId) || null;
   const [query, setQuery] = useState('');
   const [filtroCurso, setFiltroCurso] = useState('todos');
   const [mostrarInactivos, setMostrarInactivos] = useState(false);
+  const [soloIncompletos, setSoloIncompletos] = useState(false);
+
+  const incompletos = useMemo(() => data.alumnos.filter(a => a.activo && datosFaltantes(a).length > 0), [data.alumnos]);
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
     return data.alumnos.filter(a => {
       if (!mostrarInactivos && !a.activo) return false;
+      if (soloIncompletos && incompletos.length > 0 && datosFaltantes(a).length === 0) return false;
       if (filtroCurso === 'sin-curso' && a.cursoId) return false;
       if (filtroCurso !== 'todos' && filtroCurso !== 'sin-curso' && a.cursoId !== filtroCurso) return false;
       if (q && !(a.nombre + ' ' + a.apellido + ' ' + a.dni).toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [data.alumnos, query, filtroCurso, mostrarInactivos]);
+  }, [data.alumnos, query, filtroCurso, mostrarInactivos, soloIncompletos]);
 
   const conteoPorCurso = useMemo(() => {
     const c = {};
@@ -1815,6 +2005,11 @@ function AlumnosTab({ data, update }) {
                   )}
                 </select>
               </div>
+              {incompletos.length > 0 && (
+                <FilterChip active={soloIncompletos} onClick={() => setSoloIncompletos(!soloIncompletos)}>
+                  <span className="flex items-center gap-1.5"><AlertCircle size={12} /> Faltan datos · {incompletos.length}</span>
+                </FilterChip>
+              )}
               <label className="ml-auto text-xs text-stone-500 flex items-center gap-1.5 cursor-pointer">
                 <input type="checkbox" checked={mostrarInactivos} onChange={e => setMostrarInactivos(e.target.checked)} className="rounded" />
                 Mostrar inactivos
@@ -1834,6 +2029,7 @@ function AlumnosTab({ data, update }) {
                 {filtered.map(a => {
                   const curso = data.cursos.find(c => c.id === a.cursoId);
                   const grupo = data.gruposFamiliares.find(g => g.id === a.grupoFamiliarId);
+                  const faltantes = datosFaltantes(a);
                   return (
                     <div key={a.id} className={`flex items-center gap-3 px-5 py-3 hover:bg-stone-50 ${!a.activo ? 'opacity-50' : ''}`}>
                       <Avatar alumno={a} />
@@ -1845,8 +2041,25 @@ function AlumnosTab({ data, update }) {
                         </div>
                         <div className="text-xs text-stone-500 truncate">
                           {curso?.nombre || 'Sin curso'} · {a.horarioCurso || (a.dia ? `${a.dia} ${a.horario || ''}` : 'Sin horario')} · DNI {a.dni}
+                          {a.contactoNombre && <> · {a.contactoNombre}</>}
                         </div>
+                        {faltantes.length > 0 && (
+                          <button
+                            onClick={() => setCompletando(a)}
+                            className="mt-1 text-xs px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-full hover:bg-amber-100 flex items-center gap-1 w-fit"
+                          >
+                            <AlertCircle size={11} /> Falta {faltantes.join(', ')} · completar
+                          </button>
+                        )}
                       </div>
+                      {a.activo && a.cursoId && (
+                        <button
+                          onClick={() => setViendoCuotasId(a.id)}
+                          className="text-sm text-emerald-700 hover:bg-emerald-50 px-3 py-1.5 rounded-lg flex items-center gap-1.5 whitespace-nowrap"
+                        >
+                          <CreditCard size={14} /> Ver cuotas
+                        </button>
+                      )}
                       <button onClick={() => setEditing(a)} className="p-2 text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-lg">
                         <Edit2 size={16} />
                       </button>
@@ -1873,6 +2086,25 @@ function AlumnosTab({ data, update }) {
               update={update}
               onSave={saveAlumno}
               onClose={() => setEditing(null)}
+            />
+          )}
+
+          {completando && (
+            <QuickCompleteModal
+              alumno={completando}
+              data={data}
+              onSave={(cambios) => { saveAlumno({ ...completando, ...cambios }); setCompletando(null); }}
+              onClose={() => setCompletando(null)}
+            />
+          )}
+
+          {viendoCuotas && (
+            <AlumnoCuotasModal
+              alumno={viendoCuotas}
+              data={data}
+              update={update}
+              onClose={() => setViendoCuotasId(null)}
+              onEdit={() => { setEditing(viendoCuotas); setViendoCuotasId(null); }}
             />
           )}
         </>
@@ -2073,9 +2305,11 @@ function GruposFamiliaresView({ data, update }) {
                         const cfg = data.configuracion;
                         // miembros está ordenado descendente (más caro = idx 0 = posición 1)
                         const posicion = idx + 1;
-                        const descuentos = [...(cfg.descuentosHermanos || [])].sort((x, y) => x.posicion - y.posicion);
                         let descPct = 0;
-                        descuentos.forEach(d => { if (posicion >= d.posicion) descPct = d.porcentaje; });
+                        if (posicion === miembros.length && miembros.length > 1) {
+                          const descuentos = [...(cfg.descuentosHermanos || [])].sort((x, y) => x.posicion - y.posicion);
+                          descuentos.forEach(d => { if (posicion >= d.posicion) descPct = d.porcentaje; });
+                        }
                         return (
                           <div key={a.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-stone-50 border border-stone-100">
                             <div className="w-6 h-6 rounded-full bg-stone-200 flex items-center justify-center text-xs font-bold text-stone-600 shrink-0">
@@ -2092,9 +2326,9 @@ function GruposFamiliaresView({ data, update }) {
                               )}
                               {descPct > 0 ? (
                                 <div className="text-xs font-semibold text-emerald-700">−{descPct}%</div>
-                              ) : idx === 0 ? (
+                              ) : (
                                 <div className="text-xs text-stone-400">sin descuento</div>
-                              ) : null}
+                              )}
                             </div>
                             <button
                               onClick={() => quitarAlumno(a.id)}
@@ -2179,7 +2413,7 @@ function GruposFamiliaresView({ data, update }) {
 // ============================================================
 function AlumnoForm({ alumno, data, update, onSave, onClose }) {
   const [form, setForm] = useState(alumno || {
-    nombre: '', apellido: '', dni: '', fechaNacimiento: '', celular: '', celularAlternativo: '',
+    nombre: '', apellido: '', dni: '', fechaNacimiento: '', celular: '', celularAlternativo: '', contactoNombre: '',
     cursoId: data.cursos[0]?.id || '', horarioCurso: '', grupoFamiliarId: null, activo: true, observaciones: ''
   });
 
@@ -2211,6 +2445,7 @@ function AlumnoForm({ alumno, data, update, onSave, onClose }) {
             <Field label="DNI" value={form.dni} onChange={v => set('dni', v)} />
             <Field label="Fecha de nacimiento" type="date" value={form.fechaNacimiento} onChange={v => set('fechaNacimiento', v)} />
             <Field label="Celular principal" value={form.celular} onChange={v => set('celular', v)} hint="Sin 0 ni 15. Ej: 1145678901" />
+            <Field label="Nombre padre/madre/tutor" value={form.contactoNombre} onChange={v => set('contactoNombre', v)} hint="A quién corresponde el celular principal" />
             <Field label="Celular alternativo" value={form.celularAlternativo} onChange={v => set('celularAlternativo', v)} />
           </div>
 
@@ -2313,6 +2548,195 @@ function AlumnoForm({ alumno, data, update, onSave, onClose }) {
   );
 }
 
+// Panel de cuotas de un alumno, accesible desde la solapa Alumnos: permite
+// ver el estado de cada cuota (con fecha y método de pago al ver el detalle)
+// y cobrar directamente, reutilizando los mismos componentes de Pagos.
+function AlumnoCuotasModal({ alumno, data, update, onClose, onEdit }) {
+  const curso = data.cursos.find(c => c.id === alumno.cursoId);
+  const [anio, setAnio] = useState(new Date().getFullYear());
+  const [selectedPeriodos, setSelectedPeriodos] = useState([]);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showCalcularModal, setShowCalcularModal] = useState(false);
+  const [pagoView, setPagoView] = useState(null);
+
+  const togglePeriodo = (periodoId) => {
+    const existe = selectedPeriodos.find(p => p.periodoId === periodoId && p.anio === anio);
+    if (existe) {
+      setSelectedPeriodos(selectedPeriodos.filter(p => !(p.periodoId === periodoId && p.anio === anio)));
+    } else {
+      setSelectedPeriodos([...selectedPeriodos, { alumnoId: alumno.id, periodoId, anio }]);
+    }
+  };
+  const isPeriodoSelected = (periodoId) => selectedPeriodos.some(p => p.periodoId === periodoId && p.anio === anio);
+
+  const verPago = (periodoId) => {
+    const estadoCuota = obtenerEstadoCuota(data.pagos, alumno.id, periodoId, anio);
+    const periodo = PERIODOS.find(p => p.id === periodoId);
+    if (estadoCuota.pagos.length > 0) {
+      setPagoView({ alumno, periodo, anio, estadoCuota });
+    }
+  };
+
+  const eliminarPago = (pagoId) => {
+    update({ pagos: data.pagos.filter(p => p.id !== pagoId) });
+    setPagoView(null);
+  };
+
+  const cobrarSaldo = (periodo, anioSaldo, saldo) => {
+    setPagoView(null);
+    setSelectedPeriodos([{ alumnoId: alumno.id, periodoId: periodo.id, anio: anioSaldo, esSaldo: true, montoSaldo: saldo }]);
+    setShowPaymentModal(true);
+  };
+
+  const onConfirmPayment = (paymentDetails) => {
+    const newPagos = selectedPeriodos.map(sp => {
+      const detalle = paymentDetails.perAlumno[sp.alumnoId]?.[sp.periodoId];
+      return {
+        id: uid(),
+        alumnoId: sp.alumnoId,
+        periodoId: sp.periodoId,
+        anio: sp.anio,
+        fechaPago: today(),
+        montoCobrado: detalle?.monto || 0,
+        precioFijado: detalle?.precioFijado || detalle?.monto || 0,
+        montoTotal: detalle?.monto || 0,
+        metodo: detalle?.metodo || 'efectivo',
+        observaciones: ''
+      };
+    });
+    update({ pagos: [...data.pagos, ...newPagos] });
+  };
+
+  const closePaymentModal = () => {
+    setShowPaymentModal(false);
+    setSelectedPeriodos([]);
+  };
+
+  return (
+    <>
+      <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center p-4 overflow-y-auto">
+        <div className="bg-white rounded-2xl max-w-2xl w-full my-8">
+          <div className="sticky top-0 bg-white border-b border-stone-200 px-6 py-4 flex items-center justify-between rounded-t-2xl">
+            <h2 className="font-semibold">Cuotas de {fullName(alumno)}</h2>
+            <button onClick={onClose} className="text-stone-400 hover:text-stone-700"><X size={20} /></button>
+          </div>
+          <div className="p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <span className="text-xs uppercase tracking-wider text-stone-500">Año:</span>
+              <select
+                value={anio}
+                onChange={e => { setAnio(Number(e.target.value)); setSelectedPeriodos([]); }}
+                className="px-3 py-1.5 rounded-lg border border-stone-200 bg-white text-sm"
+              >
+                {[2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </div>
+            <AlumnoPagoCard
+              alumno={alumno}
+              curso={curso}
+              data={data}
+              update={update}
+              anio={anio}
+              isSelected={isPeriodoSelected}
+              togglePeriodo={togglePeriodo}
+              onVerPago={verPago}
+              onEdit={onEdit}
+            />
+            {selectedPeriodos.length > 0 && (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowCalcularModal(true)}
+                  className="px-4 py-3 rounded-xl border border-stone-300 text-stone-700 hover:bg-stone-50 font-medium text-sm flex items-center justify-center gap-2"
+                >
+                  <Calculator size={16} />
+                  Calcular importe
+                </button>
+                <button
+                  onClick={() => setShowPaymentModal(true)}
+                  className="flex-1 bg-emerald-700 hover:bg-emerald-800 text-white px-6 py-3 rounded-xl font-medium flex items-center justify-center gap-2"
+                >
+                  <DollarSign size={18} />
+                  Cobrar {selectedPeriodos.length} {selectedPeriodos.length === 1 ? 'cuota' : 'cuotas'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {showCalcularModal && (
+        <CalcularImporteModal data={data} selectedPeriodos={selectedPeriodos} onClose={() => setShowCalcularModal(false)} />
+      )}
+
+      {showPaymentModal && (
+        <PaymentModal
+          data={data}
+          update={update}
+          selectedPeriodos={selectedPeriodos}
+          onClose={closePaymentModal}
+          onConfirm={onConfirmPayment}
+        />
+      )}
+
+      {pagoView && (
+        <PagoDetalleModal
+          {...pagoView}
+          onClose={() => setPagoView(null)}
+          onDelete={eliminarPago}
+          onCobrarSaldo={(saldo) => cobrarSaldo(pagoView.periodo, pagoView.anio, saldo)}
+        />
+      )}
+    </>
+  );
+}
+
+// Modal chico para completar solo los datos que le faltan a un alumno,
+// sin abrir el formulario completo.
+function QuickCompleteModal({ alumno, data, onSave, onClose }) {
+  const faltantes = datosFaltantes(alumno);
+  const [celular, setCelular] = useState(alumno.celular || '');
+  const [cursoId, setCursoId] = useState(alumno.cursoId || '');
+  const [fechaNacimiento, setFechaNacimiento] = useState(alumno.fechaNacimiento || '');
+
+  const guardar = () => onSave({ celular, cursoId, fechaNacimiento });
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl max-w-sm w-full">
+        <div className="border-b border-stone-200 px-6 py-4 flex items-center justify-between">
+          <h2 className="font-semibold">Completar datos — {fullName(alumno)}</h2>
+          <button onClick={onClose}><X size={20} /></button>
+        </div>
+        <div className="p-6 space-y-4">
+          {faltantes.includes('celular') && (
+            <Field label="Celular principal" value={celular} onChange={setCelular} hint="Sin 0 ni 15. Ej: 1145678901" />
+          )}
+          {faltantes.includes('curso') && (
+            <div>
+              <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Curso</label>
+              <select
+                value={cursoId}
+                onChange={e => setCursoId(e.target.value)}
+                className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 bg-white"
+              >
+                <option value="">— Sin asignar —</option>
+                {data.cursos.filter(c => c.activo).map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+              </select>
+            </div>
+          )}
+          {faltantes.includes('fecha de nacimiento') && (
+            <Field label="Fecha de nacimiento" type="date" value={fechaNacimiento} onChange={setFechaNacimiento} />
+          )}
+          <div className="flex gap-2 pt-2">
+            <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-lg border border-stone-200 hover:bg-stone-50 font-medium text-sm">Cancelar</button>
+            <button onClick={guardar} className="flex-1 px-4 py-2.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-medium text-sm">Guardar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Field({ label, value, onChange, type = 'text', hint }) {
   return (
     <div>
@@ -2349,6 +2773,7 @@ function FilterChip({ active, onClick, children }) {
 function CursosTab({ data, update }) {
   const [editingPriceFor, setEditingPriceFor] = useState(null);
   const [editingCurso, setEditingCurso] = useState(null);
+  const [showBulkPrice, setShowBulkPrice] = useState(false);
 
   const guardarPrecios = (cursoId, precios, vigenciaDesde) => {
     // Crear nuevos registros (no modificar los anteriores)
@@ -2362,6 +2787,11 @@ function CursosTab({ data, update }) {
     }));
     update({ preciosCuotas: [...data.preciosCuotas, ...nuevos] });
     setEditingPriceFor(null);
+  };
+
+  const guardarPreciosMasivo = (nuevos) => {
+    update({ preciosCuotas: [...data.preciosCuotas, ...nuevos] });
+    setShowBulkPrice(false);
   };
 
   const guardarCurso = (curso) => {
@@ -2384,9 +2814,14 @@ function CursosTab({ data, update }) {
           <h2 className="font-semibold">Cursos y precios</h2>
           <p className="text-sm text-stone-500 mt-0.5">Los precios se guardan con vigencia: actualizar precios no modifica cuotas anteriores</p>
         </div>
-        <button onClick={() => setEditingCurso({})} className="bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
-          <Plus size={16} /> Curso
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => setShowBulkPrice(true)} className="border border-emerald-700 text-emerald-700 hover:bg-emerald-50 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
+            <DollarSign size={16} /> Actualizar precios (todos los niveles)
+          </button>
+          <button onClick={() => setEditingCurso({})} className="bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
+            <Plus size={16} /> Curso
+          </button>
+        </div>
       </div>
 
       <div className="space-y-3">
@@ -2438,6 +2873,9 @@ function CursosTab({ data, update }) {
       )}
       {editingCurso && (
         <CursoFormModal curso={editingCurso.id ? editingCurso : null} onSave={guardarCurso} onClose={() => setEditingCurso(null)} />
+      )}
+      {showBulkPrice && (
+        <BulkPriceUpdateModal data={data} onSave={guardarPreciosMasivo} onClose={() => setShowBulkPrice(false)} />
       )}
     </div>
   );
@@ -2644,6 +3082,110 @@ function PriceEditorModal({ curso, data, onSave, onClose }) {
   );
 }
 
+// Actualización masiva de precios: una sola fecha de vigencia para todos los
+// niveles, se tabula por el importe en efectivo y la transferencia se calcula
+// sola (+10%). Solo crea un registro nuevo para los cursos cuyo importe cambió.
+function BulkPriceUpdateModal({ data, onSave, onClose }) {
+  const hoy = today();
+  const cursosActivos = data.cursos.filter(c => c.activo);
+  const [vigencia, setVigencia] = useState(hoy);
+  const [importes, setImportes] = useState(() => {
+    const init = {};
+    cursosActivos.forEach(c => {
+      const precio = buscarPrecioVigente(data.preciosCuotas, c.id, 'MENSUAL', hoy);
+      init[c.id] = precio ? String(precio.efectivo) : '';
+    });
+    return init;
+  });
+
+  const setImporte = (cursoId, val) => setImportes({ ...importes, [cursoId]: val });
+
+  const cambios = cursosActivos.filter(c => {
+    const precio = buscarPrecioVigente(data.preciosCuotas, c.id, 'MENSUAL', hoy);
+    const nuevo = Number(importes[c.id]);
+    if (!importes[c.id] || Number.isNaN(nuevo) || nuevo <= 0) return false;
+    return !precio || nuevo !== precio.efectivo;
+  });
+
+  const guardar = () => {
+    const nuevos = cambios.map(c => ({
+      id: uid(),
+      cursoId: c.id,
+      tipo: 'MENSUAL',
+      efectivo: Number(importes[c.id]),
+      transferencia: Math.round(Number(importes[c.id]) * 1.1),
+      vigenciaDesde: vigencia
+    }));
+    onSave(nuevos);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-white rounded-2xl max-w-lg w-full my-8 max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white border-b border-stone-200 px-6 py-4 flex items-center justify-between">
+          <h2 className="font-semibold">Actualizar precios — todos los niveles</h2>
+          <button onClick={onClose}><X size={20} /></button>
+        </div>
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Vigencia desde (aplica a todos los niveles)</label>
+            <input
+              type="date"
+              value={vigencia}
+              onChange={e => setVigencia(e.target.value)}
+              autoFocus
+              className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 bg-white"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <p className="text-xs text-stone-500">
+              Ingresá el nuevo importe en efectivo de cada nivel y andá tabulando. La transferencia se calcula sola (+10%). Dejá vacío o sin cambios el nivel que no quieras actualizar.
+            </p>
+          </div>
+
+          <div className="divide-y divide-stone-100 border border-stone-200 rounded-xl overflow-hidden">
+            {cursosActivos.map((c, idx) => {
+              const precioActual = buscarPrecioVigente(data.preciosCuotas, c.id, 'MENSUAL', hoy);
+              const nuevo = Number(importes[c.id]);
+              const transferenciaPreview = nuevo > 0 ? Math.round(nuevo * 1.1) : null;
+              return (
+                <div key={c.id} className="flex items-center gap-3 px-4 py-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium truncate">{c.nombre}</div>
+                    <div className="text-xs text-stone-400">
+                      Actual: {precioActual ? fmtMoney(precioActual.efectivo) : 'Sin precio'}
+                      {transferenciaPreview != null && <> · Transferencia: {fmtMoney(transferenciaPreview)}</>}
+                    </div>
+                  </div>
+                  <input
+                    type="number"
+                    tabIndex={idx + 1}
+                    value={importes[c.id]}
+                    onChange={e => setImporte(c.id, e.target.value)}
+                    className="w-32 px-3 py-2 rounded-lg border border-stone-200 text-sm text-right focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                  />
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex gap-2 pt-2">
+            <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-lg border border-stone-200 hover:bg-stone-50 font-medium text-sm">Cancelar</button>
+            <button
+              onClick={guardar}
+              disabled={cambios.length === 0 || !vigencia}
+              className="flex-1 px-4 py-2.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-medium text-sm disabled:opacity-50"
+            >
+              Guardar {cambios.length > 0 ? `(${cambios.length} nivel${cambios.length !== 1 ? 'es' : ''})` : ''}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CursoFormModal({ curso, onSave, onClose }) {
   const [nombre, setNombre] = useState(curso?.nombre || '');
   const [horarios, setHorarios] = useState(curso?.horarios || []);
@@ -2829,6 +3371,19 @@ function ConfigTab({ data, update }) {
             Variables: <code className="bg-stone-100 px-1 rounded">{'{nombre}'}</code> <code className="bg-stone-100 px-1 rounded">{'{periodos}'}</code> <code className="bg-stone-100 px-1 rounded">{'{instituto}'}</code> <code className="bg-stone-100 px-1 rounded">{'{total}'}</code> <code className="bg-stone-100 px-1 rounded">{'{medio}'}</code>
           </p>
         </div>
+
+        <div>
+          <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Plantilla "Calcular importe" (cotización, sin cobrar)</label>
+          <textarea
+            value={config.plantillaWhatsAppCotizacion || ''}
+            onChange={e => set('plantillaWhatsAppCotizacion', e.target.value)}
+            rows={3}
+            className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 text-sm"
+          />
+          <p className="text-xs text-stone-400 mt-1">
+            Variables: <code className="bg-stone-100 px-1 rounded">{'{nombre}'}</code> <code className="bg-stone-100 px-1 rounded">{'{periodos}'}</code> <code className="bg-stone-100 px-1 rounded">{'{instituto}'}</code> <code className="bg-stone-100 px-1 rounded">{'{detalle}'}</code> <code className="bg-stone-100 px-1 rounded">{'{total}'}</code> <code className="bg-stone-100 px-1 rounded">{'{totalTransferencia}'}</code>
+          </p>
+        </div>
       </div>
 
       <div className="bg-white rounded-2xl border border-stone-200 p-6 space-y-4">
@@ -2895,7 +3450,7 @@ function ConfigTab({ data, update }) {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="font-semibold">Descuentos por hermanos</h2>
-            <p className="text-sm text-stone-500 mt-0.5">Definí qué porcentaje de descuento se aplica según la posición del hermano (ordenados automáticamente de cuota más cara a más barata).</p>
+            <p className="text-sm text-stone-500 mt-0.5">El descuento es único por grupo familiar y se aplica siempre a la cuota más barata (nunca se acumula con otra). El porcentaje depende de cuántos hermanos activos hay en total: definí acá el porcentaje según esa cantidad.</p>
           </div>
           <button
             onClick={() => {
@@ -2921,7 +3476,7 @@ function ConfigTab({ data, update }) {
                 <div key={realIdx} className="flex items-center gap-3 p-3 border border-stone-200 rounded-lg">
                   <div className="flex-1 grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs text-stone-500">Posición del hermano</label>
+                      <label className="text-xs text-stone-500">Cantidad de hermanos</label>
                       <input
                         type="number"
                         min="1"
@@ -3031,6 +3586,7 @@ function DeudoresView({ data }) {
       .map(curso => {
         const alumnos = data.alumnos
           .filter(a => a.activo && a.cursoId === curso.id)
+          .filter(a => !esCuotaAnulada(a, periodo, anio))
           .filter(a => obtenerEstadoCuota(data.pagos, a.id, periodo, anio).estado === 'pendiente')
           .sort((a, b) => (a.apellido + a.nombre).localeCompare(b.apellido + b.nombre));
         return { curso, alumnos };
