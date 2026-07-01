@@ -899,7 +899,10 @@ function PagoDetalleModal({ alumno, periodo, anio, estadoCuota, onClose, onDelet
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium">{fmtMoney(monto)}</div>
-                        <div className="text-xs text-stone-500">{fmtFecha(pago.fechaPago)}{idx === 0 && estadoCuota.pagos.length > 1 ? ' · 1° pago' : ''}</div>
+                        <div className="text-xs text-stone-500">
+                          {fmtFecha(pago.fechaPago)} · {pago.metodo === 'transferencia' ? 'Transferencia/MP' : 'Efectivo'}
+                          {idx === 0 && estadoCuota.pagos.length > 1 ? ' · 1° pago' : ''}
+                        </div>
                       </div>
                       {!confirmando && (
                         <button
@@ -1769,6 +1772,8 @@ function AlumnosTab({ data, update }) {
   const [subTab, setSubTab] = useState('lista'); // 'lista' | 'grupos'
   const [editing, setEditing] = useState(null);
   const [completando, setCompletando] = useState(null);
+  const [viendoCuotasId, setViendoCuotasId] = useState(null);
+  const viendoCuotas = data.alumnos.find(a => a.id === viendoCuotasId) || null;
   const [query, setQuery] = useState('');
   const [filtroCurso, setFiltroCurso] = useState('todos');
   const [mostrarInactivos, setMostrarInactivos] = useState(false);
@@ -1923,6 +1928,14 @@ function AlumnosTab({ data, update }) {
                           </button>
                         )}
                       </div>
+                      {a.activo && a.cursoId && (
+                        <button
+                          onClick={() => setViendoCuotasId(a.id)}
+                          className="text-sm text-emerald-700 hover:bg-emerald-50 px-3 py-1.5 rounded-lg flex items-center gap-1.5 whitespace-nowrap"
+                        >
+                          <CreditCard size={14} /> Ver cuotas
+                        </button>
+                      )}
                       <button onClick={() => setEditing(a)} className="p-2 text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-lg">
                         <Edit2 size={16} />
                       </button>
@@ -1958,6 +1971,16 @@ function AlumnosTab({ data, update }) {
               data={data}
               onSave={(cambios) => { saveAlumno({ ...completando, ...cambios }); setCompletando(null); }}
               onClose={() => setCompletando(null)}
+            />
+          )}
+
+          {viendoCuotas && (
+            <AlumnoCuotasModal
+              alumno={viendoCuotas}
+              data={data}
+              update={update}
+              onClose={() => setViendoCuotasId(null)}
+              onEdit={() => { setEditing(viendoCuotas); setViendoCuotasId(null); }}
             />
           )}
         </>
@@ -2396,6 +2419,134 @@ function AlumnoForm({ alumno, data, update, onSave, onClose }) {
         </div>
       </div>
     </div>
+  );
+}
+
+// Panel de cuotas de un alumno, accesible desde la solapa Alumnos: permite
+// ver el estado de cada cuota (con fecha y método de pago al ver el detalle)
+// y cobrar directamente, reutilizando los mismos componentes de Pagos.
+function AlumnoCuotasModal({ alumno, data, update, onClose, onEdit }) {
+  const curso = data.cursos.find(c => c.id === alumno.cursoId);
+  const [anio, setAnio] = useState(new Date().getFullYear());
+  const [selectedPeriodos, setSelectedPeriodos] = useState([]);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [pagoView, setPagoView] = useState(null);
+
+  const togglePeriodo = (periodoId) => {
+    const existe = selectedPeriodos.find(p => p.periodoId === periodoId && p.anio === anio);
+    if (existe) {
+      setSelectedPeriodos(selectedPeriodos.filter(p => !(p.periodoId === periodoId && p.anio === anio)));
+    } else {
+      setSelectedPeriodos([...selectedPeriodos, { alumnoId: alumno.id, periodoId, anio }]);
+    }
+  };
+  const isPeriodoSelected = (periodoId) => selectedPeriodos.some(p => p.periodoId === periodoId && p.anio === anio);
+
+  const verPago = (periodoId) => {
+    const estadoCuota = obtenerEstadoCuota(data.pagos, alumno.id, periodoId, anio);
+    const periodo = PERIODOS.find(p => p.id === periodoId);
+    if (estadoCuota.pagos.length > 0) {
+      setPagoView({ alumno, periodo, anio, estadoCuota });
+    }
+  };
+
+  const eliminarPago = (pagoId) => {
+    update({ pagos: data.pagos.filter(p => p.id !== pagoId) });
+    setPagoView(null);
+  };
+
+  const cobrarSaldo = (periodo, anioSaldo, saldo) => {
+    setPagoView(null);
+    setSelectedPeriodos([{ alumnoId: alumno.id, periodoId: periodo.id, anio: anioSaldo, esSaldo: true, montoSaldo: saldo }]);
+    setShowPaymentModal(true);
+  };
+
+  const onConfirmPayment = (paymentDetails) => {
+    const newPagos = selectedPeriodos.map(sp => {
+      const detalle = paymentDetails.perAlumno[sp.alumnoId]?.[sp.periodoId];
+      return {
+        id: uid(),
+        alumnoId: sp.alumnoId,
+        periodoId: sp.periodoId,
+        anio: sp.anio,
+        fechaPago: today(),
+        montoCobrado: detalle?.monto || 0,
+        precioFijado: detalle?.precioFijado || detalle?.monto || 0,
+        montoTotal: detalle?.monto || 0,
+        metodo: detalle?.metodo || 'efectivo',
+        observaciones: ''
+      };
+    });
+    update({ pagos: [...data.pagos, ...newPagos] });
+  };
+
+  const closePaymentModal = () => {
+    setShowPaymentModal(false);
+    setSelectedPeriodos([]);
+  };
+
+  return (
+    <>
+      <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center p-4 overflow-y-auto">
+        <div className="bg-white rounded-2xl max-w-2xl w-full my-8">
+          <div className="sticky top-0 bg-white border-b border-stone-200 px-6 py-4 flex items-center justify-between rounded-t-2xl">
+            <h2 className="font-semibold">Cuotas de {fullName(alumno)}</h2>
+            <button onClick={onClose} className="text-stone-400 hover:text-stone-700"><X size={20} /></button>
+          </div>
+          <div className="p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <span className="text-xs uppercase tracking-wider text-stone-500">Año:</span>
+              <select
+                value={anio}
+                onChange={e => { setAnio(Number(e.target.value)); setSelectedPeriodos([]); }}
+                className="px-3 py-1.5 rounded-lg border border-stone-200 bg-white text-sm"
+              >
+                {[2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </div>
+            <AlumnoPagoCard
+              alumno={alumno}
+              curso={curso}
+              data={data}
+              update={update}
+              anio={anio}
+              isSelected={isPeriodoSelected}
+              togglePeriodo={togglePeriodo}
+              onVerPago={verPago}
+              onEdit={onEdit}
+            />
+            {selectedPeriodos.length > 0 && (
+              <button
+                onClick={() => setShowPaymentModal(true)}
+                className="w-full bg-emerald-700 hover:bg-emerald-800 text-white px-6 py-3 rounded-xl font-medium flex items-center justify-center gap-2"
+              >
+                <DollarSign size={18} />
+                Cobrar {selectedPeriodos.length} {selectedPeriodos.length === 1 ? 'cuota' : 'cuotas'}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {showPaymentModal && (
+        <PaymentModal
+          data={data}
+          update={update}
+          selectedPeriodos={selectedPeriodos}
+          onClose={closePaymentModal}
+          onConfirm={onConfirmPayment}
+        />
+      )}
+
+      {pagoView && (
+        <PagoDetalleModal
+          {...pagoView}
+          onClose={() => setPagoView(null)}
+          onDelete={eliminarPago}
+          onCobrarSaldo={(saldo) => cobrarSaldo(pagoView.periodo, pagoView.anio, saldo)}
+        />
+      )}
+    </>
   );
 }
 
