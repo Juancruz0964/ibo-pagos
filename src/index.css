@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Font classes — disponibles globalmente (también definidas en el componente por compatibilidad) */
+.font-display { font-family: 'Fraunces', Georgia, serif; font-optical-sizing: auto; }
+.font-body    { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+
+@layer base {
+  /* Mejor renderizado de texto en todos los navegadores */
+  * {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Color de selección de texto acorde al diseño */
+  ::selection {
+    background-color: #a7f3d0;
+    color: #064e3b;
+  }
+}
+
+/* Scrollbar fino y estilizado (Chrome, Edge, Safari) */
+::-webkit-scrollbar       { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d1fae5; border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: #6ee7b7; }
+
+/* Animación para la pantalla de carga */
+@keyframes ibo-dot {
+  0%, 80%, 100% { transform: scale(0.5); opacity: 0.3; }
+  40%           { transform: scale(1);   opacity: 1;   }
+}

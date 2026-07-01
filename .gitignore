@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.env
+.env.txt
+ibo_datos_importacion.json
+backups/
+.claude/

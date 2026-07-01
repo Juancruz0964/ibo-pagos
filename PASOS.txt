@@ -1,0 +1,90 @@
+================================================================================
+  IBO PAGOS — PASOS PARA PUBLICAR EN LA WEB CON GOOGLE SHEETS
+  Seguí cada paso en orden. Tiempo estimado: 20-30 minutos.
+================================================================================
+
+
+PASO 1 — CREAR LA HOJA DE GOOGLE SHEETS
+─────────────────────────────────────────
+1. Andá a https://sheets.google.com
+2. Creá una hoja nueva (botón "+" o "Nueva hoja")
+3. Poné de nombre: "IBO Pagos - Datos"
+4. Dejala abierta, la necesitás en el paso 2.
+
+
+PASO 2 — CREAR EL GOOGLE APPS SCRIPT
+──────────────────────────────────────
+1. Dentro de la hoja que acabás de crear, hacé click en el menú:
+   Extensiones → Apps Script
+2. Se abre el editor. Borrá todo el código que hay por defecto.
+3. Abrí el archivo: ibo-pagos/gas/Code.gs (con el Bloc de notas o cualquier editor)
+4. Copiá TODO el contenido y pegalo en el editor de Apps Script.
+5. Hacé click en el ícono del diskette (Guardar) o Ctrl+S.
+6. Arriba a la izquierda, cambiá el nombre del proyecto de "Sin título" a "IBO Pagos".
+
+
+PASO 3 — DESPLEGAR EL SCRIPT COMO WEB APP
+───────────────────────────────────────────
+1. En el editor de Apps Script, hacé click en "Implementar" (botón azul arriba a la derecha)
+2. Elegí "Nueva implementación"
+3. Hacé click en el ícono de engranaje (⚙) al lado de "Tipo" y elegí "Aplicación web"
+4. Completá así:
+   - Descripción: "IBO Pagos v1"
+   - Ejecutar como: "Yo (tu email)"
+   - Quién tiene acceso: "Cualquier persona"
+5. Hacé click en "Implementar"
+6. Google te va a pedir que autorices el acceso — aceptá todo.
+7. Te va a aparecer una URL larga que empieza con:
+   https://script.google.com/macros/s/...../exec
+8. COPIÁ ESA URL — la necesitás en el paso 4.
+
+
+PASO 4 — CONFIGURAR LA URL EN EL PROYECTO
+───────────────────────────────────────────
+1. En la carpeta ibo-pagos, buscá el archivo ".env.example"
+2. Copialo y renombrá la copia a ".env" (sin el .example)
+3. Abrilo con el Bloc de notas
+4. Reemplazá "PEGA_TU_URL_ACA" con la URL del paso 3
+5. Guardá el archivo
+
+
+PASO 5 — PUBLICAR EN NETLIFY
+──────────────────────────────
+1. Andá a https://netlify.com y creá una cuenta gratuita (podés entrar con Google)
+2. Una vez adentro, hacé click en "Add new site" → "Deploy manually"
+3. Antes de subir, tenés que construir la app:
+   - Abrí una terminal en la carpeta ibo-pagos
+   - Corrí: npm run build
+   - Esto crea una carpeta "dist"
+4. En Netlify, arrastrá la carpeta "dist" al área que dice "Drag and drop"
+5. Netlify te da una URL pública (algo como https://random-name.netlify.app)
+6. IMPORTANTE: en Netlify, andá a Site configuration → Environment variables
+   y agregá la variable:
+   - Key: VITE_GAS_URL
+   - Value: (la misma URL del Apps Script del paso 3)
+7. Hacé "Redeploy" para que tome la variable de entorno.
+
+¡Listo! La app va a estar online en la URL que te dio Netlify.
+
+
+PASO 6 — VERIFICAR QUE FUNCIONA
+─────────────────────────────────
+1. Entrá a la URL de Netlify desde cualquier navegador
+2. La app debería cargar con los datos existentes
+3. Probá registrar un pago — en el header debe aparecer "Guardando…" y luego "Guardado ✓"
+4. Cerrá el navegador, volvé a entrar — los datos tienen que seguir ahí
+
+
+PROBLEMAS COMUNES
+──────────────────
+- "Error al guardar": revisá que la URL en VITE_GAS_URL sea exactamente la del paso 3
+- La app carga pero no hay datos: puede ser que Google pidió autorización de nuevo,
+  andá al editor de Apps Script y volvé a implementar
+- En Netlify los datos no se guardan: verificá que la variable VITE_GAS_URL esté
+  cargada y que hayas hecho Redeploy después de agregarla
+
+
+================================================================================
+  Si algo no funciona, contale a Claude exactamente qué paso falló y qué dice
+  el mensaje de error. Con eso alcanza para resolver cualquier problema.
+================================================================================
