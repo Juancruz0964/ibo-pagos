@@ -2450,8 +2450,24 @@ function AlumnoForm({ alumno, data, update, onSave, onClose }) {
 
   const [showNuevoGrupo, setShowNuevoGrupo] = useState(false);
   const [nuevoGrupoNombre, setNuevoGrupoNombre] = useState('');
+  const [recuperado, setRecuperado] = useState(false);
 
   const set = (k, v) => setForm({ ...form, [k]: v });
+
+  // Si estamos cargando un alumno nuevo y el DNI coincide con uno ya existente
+  // (activo o dado de baja), ofrecemos recuperar sus datos en vez de duplicar.
+  const dniCoincidente = useMemo(() => {
+    if (alumno) return null; // solo aplica al crear, no al editar
+    const dni = (form.dni || '').trim();
+    if (dni.length < 6) return null;
+    return data.alumnos.find(a => (a.dni || '').trim() === dni) || null;
+  }, [alumno, form.dni, data.alumnos]);
+
+  const usarDatosExistentes = () => {
+    if (!dniCoincidente) return;
+    setForm({ ...dniCoincidente, activo: true });
+    setRecuperado(true);
+  };
 
   const crearGrupo = () => {
     if (!nuevoGrupoNombre.trim()) return;
@@ -2479,6 +2495,32 @@ function AlumnoForm({ alumno, data, update, onSave, onClose }) {
             <Field label="Nombre padre/madre/tutor" value={form.contactoNombre} onChange={v => set('contactoNombre', v)} hint="A quién corresponde el celular principal" />
             <Field label="Celular alternativo" value={form.celularAlternativo} onChange={v => set('celularAlternativo', v)} />
           </div>
+
+          {dniCoincidente && !recuperado && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3">
+              <Avatar alumno={dniCoincidente} size="sm" />
+              <div className="flex-1 min-w-0 text-sm">
+                <div className="font-medium text-amber-900">
+                  Ya existe un alumno con este DNI: {fullName(dniCoincidente)}
+                  {!dniCoincidente.activo && <span className="ml-1.5 text-xs px-1.5 py-0.5 bg-amber-200 text-amber-800 rounded">Dado de baja</span>}
+                </div>
+                <p className="text-xs text-amber-700 mt-0.5">
+                  {dniCoincidente.activo
+                    ? 'Podés recuperar sus datos para no volver a cargarlos.'
+                    : 'Se va a reactivar con todos sus datos anteriores (curso, celular, grupo familiar, etc.) y conserva el historial de pagos.'}
+                </p>
+              </div>
+              <button
+                onClick={usarDatosExistentes}
+                className="shrink-0 text-sm bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg font-medium whitespace-nowrap"
+              >
+                Usar estos datos
+              </button>
+            </div>
+          )}
+          {recuperado && (
+            <p className="text-xs text-emerald-700 -mt-2">✓ Datos recuperados de {fullName(form)}. Revisalos y guardá para confirmar.</p>
+          )}
 
           <div>
             <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Curso</label>
