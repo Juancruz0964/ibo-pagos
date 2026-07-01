@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Search, Plus, X, Edit2, Trash2, Users, BookOpen, Settings, CreditCard,
   Check, MessageCircle, ChevronRight, Download, Upload, AlertCircle,
-  Calendar, DollarSign, UserPlus, History, Tag, Home
+  Calendar, DollarSign, UserPlus, History, Tag, Home, Ban
 } from 'lucide-react';
 import datosIniciales from '../ibo_datos_importacion.json';
 
@@ -290,6 +290,11 @@ const calcularCuota = (alumno, periodoId, anio, ctx) => {
     promo: promo ? promo.montoDescuento : 0,
     base: { efectivo: precio.efectivo, transferencia: precio.transferencia }
   };
+};
+
+// Verifica si una cuota fue anulada (alumno no debe ese periodo, ej: empezó más tarde)
+const esCuotaAnulada = (alumno, periodoId, anio) => {
+  return (alumno.cuotasAnuladas || []).includes(`${periodoId}-${anio}`);
 };
 
 // Verifica si un periodo está pagado (mantenida por compatibilidad)
@@ -652,6 +657,7 @@ function PagosTab({ data, update }) {
               alumno={al}
               curso={cur}
               data={data}
+              update={update}
               anio={anio}
               isSelected={(pid) => isPeriodoSelected(al.id, pid)}
               togglePeriodo={(pid) => togglePeriodo(al.id, pid)}
@@ -764,6 +770,7 @@ function PagosTab({ data, update }) {
             alumno={alumno}
             curso={curso}
             data={data}
+            update={update}
             anio={anio}
             isSelected={(pid) => isPeriodoSelected(alumno.id, pid)}
             togglePeriodo={(pid) => togglePeriodo(alumno.id, pid)}
@@ -971,12 +978,20 @@ function SearchBox({ query, setQuery, placeholder, resultados, onSelect, classNa
 // ============================================================
 // ALUMNO PAGO CARD (con grilla de meses)
 // ============================================================
-function AlumnoPagoCard({ alumno, curso, data, anio, isSelected, togglePeriodo, onVerPago, onChange, onRemove, showRemove, onEdit }) {
-  const periodosAplicables = PERIODOS.filter(p => !(curso?.mesesExcluidos || []).includes(p.id));
+function AlumnoPagoCard({ alumno, curso, data, update, anio, isSelected, togglePeriodo, onVerPago, onChange, onRemove, showRemove, onEdit }) {
+  const periodosAplicables = PERIODOS.filter(p => !(curso?.mesesExcluidos || []).includes(p.id) && !esCuotaAnulada(alumno, p.id, anio));
   const pagados = periodosAplicables.filter(p => obtenerEstadoCuota(data.pagos, alumno.id, p.id, anio).estado === 'pagado').length;
   const parciales = periodosAplicables.filter(p => obtenerEstadoCuota(data.pagos, alumno.id, p.id, anio).estado === 'parcial').length;
   const total = periodosAplicables.length;
-  const todosPagados = pagados === total;
+  const todosPagados = total > 0 && pagados === total;
+
+  const toggleAnulada = (periodoId) => {
+    if (!update) return;
+    const key = `${periodoId}-${anio}`;
+    const actuales = alumno.cuotasAnuladas || [];
+    const nuevas = actuales.includes(key) ? actuales.filter(k => k !== key) : [...actuales, key];
+    update({ alumnos: data.alumnos.map(a => a.id === alumno.id ? { ...a, cuotasAnuladas: nuevas } : a) });
+  };
 
   return (
     <div className="bg-white rounded-2xl border border-stone-200 shadow-sm hover:shadow-md transition-shadow duration-200 p-5">
@@ -1026,6 +1041,20 @@ function AlumnoPagoCard({ alumno, curso, data, anio, isSelected, togglePeriodo, 
               </div>
             );
           }
+          const anulada = esCuotaAnulada(alumno, p.id, anio);
+          if (anulada) {
+            return (
+              <button
+                key={p.id}
+                onClick={() => update && confirm(`¿Reactivar ${p.full} ${anio} para ${alumno.nombre}? Volverá a figurar como pendiente.`) && toggleAnulada(p.id)}
+                title={`${p.full} — no corresponde (click para reactivar)`}
+                className="flex flex-col items-center justify-center py-3 rounded-xl border border-dashed border-stone-200 text-[11px] font-semibold tracking-wide text-stone-400 bg-stone-50/60 hover:bg-stone-100"
+              >
+                <span>{p.label}</span>
+                <span className="text-[9px] font-normal">N/A</span>
+              </button>
+            );
+          }
           const estadoCuota = obtenerEstadoCuota(data.pagos, alumno.id, p.id, anio);
           const estado = estadoCuota.estado;
           const seleccionado = isSelected(p.id);
@@ -1056,10 +1085,28 @@ function AlumnoPagoCard({ alumno, curso, data, anio, isSelected, togglePeriodo, 
               {estado === 'parcial' && (
                 <span className="absolute bottom-0 left-0 right-0 h-1 bg-amber-400/70 rounded-b-xl" />
               )}
+              {estado === 'pendiente' && update && (
+                <span
+                  role="button"
+                  title="Marcar que esta cuota no corresponde (ej: alumno que empezó más tarde)"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (confirm(`¿Marcar ${p.full} ${anio} como "no corresponde" para ${alumno.nombre}?`)) {
+                      toggleAnulada(p.id);
+                    }
+                  }}
+                  className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-white border border-stone-300 text-stone-400 flex items-center justify-center opacity-60 hover:opacity-100 hover:text-red-500 hover:border-red-300"
+                >
+                  <Ban size={10} />
+                </span>
+              )}
             </button>
           );
         })}
       </div>
+      {update && (
+        <p className="text-[11px] text-stone-400 -mt-2 mb-3">El ⊘ en la esquina de una cuota pendiente la marca como "no corresponde".</p>
+      )}
 
       {total > 0 && (
         <div>
@@ -1845,6 +1892,7 @@ function AlumnosTab({ data, update }) {
                         </div>
                         <div className="text-xs text-stone-500 truncate">
                           {curso?.nombre || 'Sin curso'} · {a.horarioCurso || (a.dia ? `${a.dia} ${a.horario || ''}` : 'Sin horario')} · DNI {a.dni}
+                          {a.contactoNombre && <> · {a.contactoNombre}</>}
                         </div>
                       </div>
                       <button onClick={() => setEditing(a)} className="p-2 text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-lg">
@@ -2179,7 +2227,7 @@ function GruposFamiliaresView({ data, update }) {
 // ============================================================
 function AlumnoForm({ alumno, data, update, onSave, onClose }) {
   const [form, setForm] = useState(alumno || {
-    nombre: '', apellido: '', dni: '', fechaNacimiento: '', celular: '', celularAlternativo: '',
+    nombre: '', apellido: '', dni: '', fechaNacimiento: '', celular: '', celularAlternativo: '', contactoNombre: '',
     cursoId: data.cursos[0]?.id || '', horarioCurso: '', grupoFamiliarId: null, activo: true, observaciones: ''
   });
 
@@ -2211,6 +2259,7 @@ function AlumnoForm({ alumno, data, update, onSave, onClose }) {
             <Field label="DNI" value={form.dni} onChange={v => set('dni', v)} />
             <Field label="Fecha de nacimiento" type="date" value={form.fechaNacimiento} onChange={v => set('fechaNacimiento', v)} />
             <Field label="Celular principal" value={form.celular} onChange={v => set('celular', v)} hint="Sin 0 ni 15. Ej: 1145678901" />
+            <Field label="Nombre padre/madre/tutor" value={form.contactoNombre} onChange={v => set('contactoNombre', v)} hint="A quién corresponde el celular principal" />
             <Field label="Celular alternativo" value={form.celularAlternativo} onChange={v => set('celularAlternativo', v)} />
           </div>
 
@@ -3031,6 +3080,7 @@ function DeudoresView({ data }) {
       .map(curso => {
         const alumnos = data.alumnos
           .filter(a => a.activo && a.cursoId === curso.id)
+          .filter(a => !esCuotaAnulada(a, periodo, anio))
           .filter(a => obtenerEstadoCuota(data.pagos, a.id, periodo, anio).estado === 'pendiente')
           .sort((a, b) => (a.apellido + a.nombre).localeCompare(b.apellido + b.nombre));
         return { curso, alumnos };
