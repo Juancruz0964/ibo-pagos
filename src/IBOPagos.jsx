@@ -2398,6 +2398,7 @@ function FilterChip({ active, onClick, children }) {
 function CursosTab({ data, update }) {
   const [editingPriceFor, setEditingPriceFor] = useState(null);
   const [editingCurso, setEditingCurso] = useState(null);
+  const [showBulkPrice, setShowBulkPrice] = useState(false);
 
   const guardarPrecios = (cursoId, precios, vigenciaDesde) => {
     // Crear nuevos registros (no modificar los anteriores)
@@ -2411,6 +2412,11 @@ function CursosTab({ data, update }) {
     }));
     update({ preciosCuotas: [...data.preciosCuotas, ...nuevos] });
     setEditingPriceFor(null);
+  };
+
+  const guardarPreciosMasivo = (nuevos) => {
+    update({ preciosCuotas: [...data.preciosCuotas, ...nuevos] });
+    setShowBulkPrice(false);
   };
 
   const guardarCurso = (curso) => {
@@ -2433,9 +2439,14 @@ function CursosTab({ data, update }) {
           <h2 className="font-semibold">Cursos y precios</h2>
           <p className="text-sm text-stone-500 mt-0.5">Los precios se guardan con vigencia: actualizar precios no modifica cuotas anteriores</p>
         </div>
-        <button onClick={() => setEditingCurso({})} className="bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
-          <Plus size={16} /> Curso
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => setShowBulkPrice(true)} className="border border-emerald-700 text-emerald-700 hover:bg-emerald-50 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
+            <DollarSign size={16} /> Actualizar precios (todos los niveles)
+          </button>
+          <button onClick={() => setEditingCurso({})} className="bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
+            <Plus size={16} /> Curso
+          </button>
+        </div>
       </div>
 
       <div className="space-y-3">
@@ -2487,6 +2498,9 @@ function CursosTab({ data, update }) {
       )}
       {editingCurso && (
         <CursoFormModal curso={editingCurso.id ? editingCurso : null} onSave={guardarCurso} onClose={() => setEditingCurso(null)} />
+      )}
+      {showBulkPrice && (
+        <BulkPriceUpdateModal data={data} onSave={guardarPreciosMasivo} onClose={() => setShowBulkPrice(false)} />
       )}
     </div>
   );
@@ -2686,6 +2700,110 @@ function PriceEditorModal({ curso, data, onSave, onClose }) {
           <div className="flex gap-2 pt-2">
             <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-lg border border-stone-200 hover:bg-stone-50 font-medium text-sm">Cancelar</button>
             <button onClick={() => onSave(curso.id, precios, vigencia)} className="flex-1 px-4 py-2.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-medium text-sm">Guardar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Actualización masiva de precios: una sola fecha de vigencia para todos los
+// niveles, se tabula por el importe en efectivo y la transferencia se calcula
+// sola (+10%). Solo crea un registro nuevo para los cursos cuyo importe cambió.
+function BulkPriceUpdateModal({ data, onSave, onClose }) {
+  const hoy = today();
+  const cursosActivos = data.cursos.filter(c => c.activo);
+  const [vigencia, setVigencia] = useState(hoy);
+  const [importes, setImportes] = useState(() => {
+    const init = {};
+    cursosActivos.forEach(c => {
+      const precio = buscarPrecioVigente(data.preciosCuotas, c.id, 'MENSUAL', hoy);
+      init[c.id] = precio ? String(precio.efectivo) : '';
+    });
+    return init;
+  });
+
+  const setImporte = (cursoId, val) => setImportes({ ...importes, [cursoId]: val });
+
+  const cambios = cursosActivos.filter(c => {
+    const precio = buscarPrecioVigente(data.preciosCuotas, c.id, 'MENSUAL', hoy);
+    const nuevo = Number(importes[c.id]);
+    if (!importes[c.id] || Number.isNaN(nuevo) || nuevo <= 0) return false;
+    return !precio || nuevo !== precio.efectivo;
+  });
+
+  const guardar = () => {
+    const nuevos = cambios.map(c => ({
+      id: uid(),
+      cursoId: c.id,
+      tipo: 'MENSUAL',
+      efectivo: Number(importes[c.id]),
+      transferencia: Math.round(Number(importes[c.id]) * 1.1),
+      vigenciaDesde: vigencia
+    }));
+    onSave(nuevos);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-white rounded-2xl max-w-lg w-full my-8 max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white border-b border-stone-200 px-6 py-4 flex items-center justify-between">
+          <h2 className="font-semibold">Actualizar precios — todos los niveles</h2>
+          <button onClick={onClose}><X size={20} /></button>
+        </div>
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Vigencia desde (aplica a todos los niveles)</label>
+            <input
+              type="date"
+              value={vigencia}
+              onChange={e => setVigencia(e.target.value)}
+              autoFocus
+              className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 bg-white"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <p className="text-xs text-stone-500">
+              Ingresá el nuevo importe en efectivo de cada nivel y andá tabulando. La transferencia se calcula sola (+10%). Dejá vacío o sin cambios el nivel que no quieras actualizar.
+            </p>
+          </div>
+
+          <div className="divide-y divide-stone-100 border border-stone-200 rounded-xl overflow-hidden">
+            {cursosActivos.map((c, idx) => {
+              const precioActual = buscarPrecioVigente(data.preciosCuotas, c.id, 'MENSUAL', hoy);
+              const nuevo = Number(importes[c.id]);
+              const transferenciaPreview = nuevo > 0 ? Math.round(nuevo * 1.1) : null;
+              return (
+                <div key={c.id} className="flex items-center gap-3 px-4 py-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium truncate">{c.nombre}</div>
+                    <div className="text-xs text-stone-400">
+                      Actual: {precioActual ? fmtMoney(precioActual.efectivo) : 'Sin precio'}
+                      {transferenciaPreview != null && <> · Transferencia: {fmtMoney(transferenciaPreview)}</>}
+                    </div>
+                  </div>
+                  <input
+                    type="number"
+                    tabIndex={idx + 1}
+                    value={importes[c.id]}
+                    onChange={e => setImporte(c.id, e.target.value)}
+                    className="w-32 px-3 py-2 rounded-lg border border-stone-200 text-sm text-right focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                  />
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex gap-2 pt-2">
+            <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-lg border border-stone-200 hover:bg-stone-50 font-medium text-sm">Cancelar</button>
+            <button
+              onClick={guardar}
+              disabled={cambios.length === 0 || !vigencia}
+              className="flex-1 px-4 py-2.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-medium text-sm disabled:opacity-50"
+            >
+              Guardar {cambios.length > 0 ? `(${cambios.length} nivel${cambios.length !== 1 ? 'es' : ''})` : ''}
+            </button>
           </div>
         </div>
       </div>
