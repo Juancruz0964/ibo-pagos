@@ -4,7 +4,6 @@ import {
   Check, MessageCircle, ChevronRight, Download, Upload, AlertCircle,
   Calendar, DollarSign, UserPlus, History, Tag, Home, Ban, Calculator
 } from 'lucide-react';
-import datosIniciales from '../ibo_datos_importacion.json';
 
 // ============================================================
 // STORAGE LAYER
@@ -351,21 +350,11 @@ export default function App() {
   useEffect(() => {
     storage.get('ibo_data').then(saved => {
       if (saved) {
-        // Migración: aplicar mesesExcluidos desde el JSON si el curso guardado no lo tiene
-        const cursosActualizados = (saved.cursos || []).map(c => {
-          if (!c.mesesExcluidos) {
-            const jsonCurso = datosIniciales.cursos?.find(jc => jc.id === c.id);
-            if (jsonCurso?.mesesExcluidos) return { ...c, mesesExcluidos: jsonCurso.mesesExcluidos };
-            return { ...c, mesesExcluidos: [] };
-          }
-          return c;
-        });
+        // Migración: los cursos guardados sin mesesExcluidos pasan a tener la lista vacía
+        const cursosActualizados = (saved.cursos || []).map(c =>
+          c.mesesExcluidos ? c : { ...c, mesesExcluidos: [] }
+        );
         setData({ ...initialState, ...saved, cursos: cursosActualizados });
-      } else {
-        const { _meta, ...rest } = datosIniciales;
-        setData(rest);
-        const t = _meta.totales;
-        setImportMessage(`Se importaron ${t.alumnos} alumnos, ${t.pagos} pagos, ${t.cursos} cursos y ${t.grupos_familiares} grupos familiares.`);
       }
       setLoaded(true);
     });
