@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Search, Plus, X, Edit2, Trash2, Users, BookOpen, Settings, CreditCard,
   Check, MessageCircle, ChevronRight, Download, Upload, AlertCircle,
-  Calendar, DollarSign, UserPlus, History, Tag, Home, Ban
+  Calendar, DollarSign, UserPlus, History, Tag, Home, Ban, Calculator
 } from 'lucide-react';
 import datosIniciales from '../ibo_datos_importacion.json';
 
@@ -105,7 +105,8 @@ const initialState = {
     ],
     plantillaWhatsApp: 'Hola {nombre}! Confirmamos el pago de {periodos} en {instituto} por {total} ({medio}). ¡Muchas gracias!',
     plantillaWhatsAppParcial: 'Hola {nombre}! Recibimos un pago parcial de {monto} ({medio}) para la cuota de {periodo} en {instituto}. Saldo pendiente: {saldo}. ¡Gracias!',
-    plantillaWhatsAppSaldo: 'Hola {nombre}! Confirmamos el pago del saldo pendiente de {periodo} ({monto} en {medio}) en {instituto}. ¡Cuota saldada!'
+    plantillaWhatsAppSaldo: 'Hola {nombre}! Confirmamos el pago del saldo pendiente de {periodo} ({monto} en {medio}) en {instituto}. ¡Cuota saldada!',
+    plantillaWhatsAppCotizacion: 'Hola! El importe de {periodos} en {instituto} es:\n{detalle}\nTotal: {total} (efectivo) / {totalTransferencia} (transferencia o MP).'
   }
 };
 
@@ -508,6 +509,7 @@ function PagosTab({ data, update }) {
   const [multiMode, setMultiMode] = useState(false);
   const [multiAlumnos, setMultiAlumnos] = useState([]); // [{alumnoId, periodos: [periodoId]}]
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showCalcularModal, setShowCalcularModal] = useState(false);
   const [pagoView, setPagoView] = useState(null); // {alumno, periodo, anio, pago}
   const [subView, setSubView] = useState('cobrar'); // 'cobrar' | 'deudores'
   const [editingAlumno, setEditingAlumno] = useState(null);
@@ -682,7 +684,12 @@ function PagosTab({ data, update }) {
           <FloatingPayBar
             count={totalSeleccionado}
             onClick={() => setShowPaymentModal(true)}
+            onCalcular={() => setShowCalcularModal(true)}
           />
+        )}
+
+        {showCalcularModal && (
+          <CalcularImporteModal data={data} selectedPeriodos={selectedPeriodos} onClose={() => setShowCalcularModal(false)} />
         )}
 
         {showPaymentModal && (
@@ -798,7 +805,15 @@ function PagosTab({ data, update }) {
       )}
 
       {totalSeleccionado > 0 && (
-        <FloatingPayBar count={totalSeleccionado} onClick={() => setShowPaymentModal(true)} />
+        <FloatingPayBar
+          count={totalSeleccionado}
+          onClick={() => setShowPaymentModal(true)}
+          onCalcular={() => setShowCalcularModal(true)}
+        />
+      )}
+
+      {showCalcularModal && (
+        <CalcularImporteModal data={data} selectedPeriodos={selectedPeriodos} onClose={() => setShowCalcularModal(false)} />
       )}
 
       {showPaymentModal && (
@@ -1145,9 +1160,18 @@ function AlumnoPagoCard({ alumno, curso, data, update, anio, isSelected, toggleP
 // ============================================================
 // FLOATING PAY BAR
 // ============================================================
-function FloatingPayBar({ count, onClick }) {
+function FloatingPayBar({ count, onClick, onCalcular }) {
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30">
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2">
+      {onCalcular && (
+        <button
+          onClick={onCalcular}
+          className="bg-white border border-stone-300 text-stone-700 hover:bg-stone-50 px-4 py-3 rounded-full shadow-lg flex items-center gap-2 font-medium text-sm"
+        >
+          <Calculator size={16} />
+          Calcular importe
+        </button>
+      )}
       <button
         onClick={onClick}
         className="bg-emerald-700 hover:bg-emerald-800 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-3 font-medium"
@@ -1156,6 +1180,114 @@ function FloatingPayBar({ count, onClick }) {
         Cobrar {count} {count === 1 ? 'cuota' : 'cuotas'}
         <ChevronRight size={16} />
       </button>
+    </div>
+  );
+}
+
+// ============================================================
+// CALCULAR IMPORTE (cotización rápida por WhatsApp, sin registrar cobro)
+// ============================================================
+function CalcularImporteModal({ data, selectedPeriodos, onClose }) {
+  const cfg = data.configuracion;
+
+  const lineas = selectedPeriodos
+    .map(sp => {
+      const alumno = data.alumnos.find(a => a.id === sp.alumnoId);
+      const periodo = PERIODOS.find(p => p.id === sp.periodoId);
+      const calc = alumno ? calcularCuota(alumno, sp.periodoId, sp.anio, data) : null;
+      return { ...sp, alumno, periodo, calc };
+    })
+    .filter(l => l.alumno && l.periodo && l.calc && !l.calc.error);
+
+  const grupos = {};
+  lineas.forEach(l => {
+    const tel = formatPhoneForWA(l.alumno.celular);
+    const key = tel || `sin-celular-${l.alumno.id}`;
+    if (!grupos[key]) grupos[key] = { phone: tel, alumnos: [], lineas: [], totalEfectivo: 0, totalTransferencia: 0 };
+    if (!grupos[key].alumnos.find(a => a.id === l.alumno.id)) grupos[key].alumnos.push(l.alumno);
+    grupos[key].lineas.push(l);
+    grupos[key].totalEfectivo += l.calc.efectivo || 0;
+    grupos[key].totalTransferencia += l.calc.transferencia || 0;
+  });
+  const gruposArr = Object.values(grupos);
+
+  const generarMensaje = (g) => {
+    const multi = g.alumnos.length > 1;
+    const periodosTxt = [...new Set(g.lineas.map(l => `${l.periodo.full} ${l.anio}`))].join(', ');
+    const detalle = g.lineas
+      .map(l => `${multi ? l.alumno.nombre + ' - ' : ''}${l.periodo.full} ${l.anio}: ${fmtMoney(l.calc.efectivo)}`)
+      .join('\n');
+    const template = cfg.plantillaWhatsAppCotizacion ||
+      'Hola! El importe de {periodos} en {instituto} es:\n{detalle}\nTotal: {total} (efectivo) / {totalTransferencia} (transferencia o MP).';
+    return template
+      .replace('{nombre}', g.alumnos.map(a => a.nombre).join(' y '))
+      .replace('{periodos}', periodosTxt)
+      .replace('{instituto}', cfg.nombreInstituto)
+      .replace('{detalle}', detalle)
+      .replace('{totalTransferencia}', fmtMoney(g.totalTransferencia))
+      .replace('{total}', fmtMoney(g.totalEfectivo));
+  };
+
+  const [copiadoIdx, setCopiadoIdx] = useState(null);
+  const copiar = (idx, mensaje) => {
+    navigator.clipboard?.writeText(mensaje);
+    setCopiadoIdx(idx);
+    setTimeout(() => setCopiadoIdx(null), 2000);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-white rounded-2xl max-w-lg w-full my-8 max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white border-b border-stone-200 px-6 py-4 flex items-center justify-between">
+          <h2 className="font-semibold">Calcular importe</h2>
+          <button onClick={onClose}><X size={20} /></button>
+        </div>
+        <div className="p-6 space-y-4">
+          {gruposArr.length === 0 ? (
+            <p className="text-sm text-stone-400 text-center py-6">No hay cuotas seleccionadas.</p>
+          ) : gruposArr.map((g, idx) => {
+            const mensaje = generarMensaje(g);
+            return (
+              <div key={idx} className="border border-stone-200 rounded-xl p-4 space-y-3">
+                <div className="font-medium text-sm">{g.alumnos.map(a => fullName(a)).join(' y ')}</div>
+                <div className="space-y-1 text-sm">
+                  {g.lineas.map((l, i) => (
+                    <div key={i} className="flex justify-between text-stone-600">
+                      <span>{g.alumnos.length > 1 ? `${l.alumno.nombre} — ` : ''}{l.periodo.full} {l.anio}</span>
+                      <span className="font-medium text-stone-900">{fmtMoney(l.calc.efectivo)}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex justify-between text-sm pt-2 border-t border-stone-100 font-semibold">
+                  <span>Total (efectivo)</span>
+                  <span>{fmtMoney(g.totalEfectivo)}</span>
+                </div>
+                <div className="flex justify-between text-xs text-stone-500">
+                  <span>Total (transferencia/MP)</span>
+                  <span>{fmtMoney(g.totalTransferencia)}</span>
+                </div>
+                <textarea readOnly value={mensaje} rows={4} className="w-full px-3 py-2 rounded-lg border border-stone-200 text-xs text-stone-600 bg-stone-50" />
+                <div className="flex gap-2">
+                  <button onClick={() => copiar(idx, mensaje)} className="flex-1 px-3 py-2 rounded-lg border border-stone-200 text-sm hover:bg-stone-50">
+                    {copiadoIdx === idx ? 'Copiado ✓' : 'Copiar mensaje'}
+                  </button>
+                  {g.phone && (
+                    <button
+                      onClick={() => window.open(`https://wa.me/${g.phone}?text=${encodeURIComponent(mensaje)}`, '_blank')}
+                      className="flex-1 px-3 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm flex items-center justify-center gap-1.5"
+                    >
+                      <MessageCircle size={14} /> Enviar WhatsApp
+                    </button>
+                  )}
+                </div>
+                {!g.phone && (
+                  <p className="text-xs text-amber-600">Sin celular cargado — copiá el mensaje para enviarlo manualmente.</p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
@@ -2430,6 +2562,7 @@ function AlumnoCuotasModal({ alumno, data, update, onClose, onEdit }) {
   const [anio, setAnio] = useState(new Date().getFullYear());
   const [selectedPeriodos, setSelectedPeriodos] = useState([]);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showCalcularModal, setShowCalcularModal] = useState(false);
   const [pagoView, setPagoView] = useState(null);
 
   const togglePeriodo = (periodoId) => {
@@ -2516,17 +2649,30 @@ function AlumnoCuotasModal({ alumno, data, update, onClose, onEdit }) {
               onEdit={onEdit}
             />
             {selectedPeriodos.length > 0 && (
-              <button
-                onClick={() => setShowPaymentModal(true)}
-                className="w-full bg-emerald-700 hover:bg-emerald-800 text-white px-6 py-3 rounded-xl font-medium flex items-center justify-center gap-2"
-              >
-                <DollarSign size={18} />
-                Cobrar {selectedPeriodos.length} {selectedPeriodos.length === 1 ? 'cuota' : 'cuotas'}
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowCalcularModal(true)}
+                  className="px-4 py-3 rounded-xl border border-stone-300 text-stone-700 hover:bg-stone-50 font-medium text-sm flex items-center justify-center gap-2"
+                >
+                  <Calculator size={16} />
+                  Calcular importe
+                </button>
+                <button
+                  onClick={() => setShowPaymentModal(true)}
+                  className="flex-1 bg-emerald-700 hover:bg-emerald-800 text-white px-6 py-3 rounded-xl font-medium flex items-center justify-center gap-2"
+                >
+                  <DollarSign size={18} />
+                  Cobrar {selectedPeriodos.length} {selectedPeriodos.length === 1 ? 'cuota' : 'cuotas'}
+                </button>
+              </div>
             )}
           </div>
         </div>
       </div>
+
+      {showCalcularModal && (
+        <CalcularImporteModal data={data} selectedPeriodos={selectedPeriodos} onClose={() => setShowCalcularModal(false)} />
+      )}
 
       {showPaymentModal && (
         <PaymentModal
@@ -3229,6 +3375,19 @@ function ConfigTab({ data, update }) {
           />
           <p className="text-xs text-stone-400 mt-1">
             Variables: <code className="bg-stone-100 px-1 rounded">{'{nombre}'}</code> <code className="bg-stone-100 px-1 rounded">{'{periodos}'}</code> <code className="bg-stone-100 px-1 rounded">{'{instituto}'}</code> <code className="bg-stone-100 px-1 rounded">{'{total}'}</code> <code className="bg-stone-100 px-1 rounded">{'{medio}'}</code>
+          </p>
+        </div>
+
+        <div>
+          <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Plantilla "Calcular importe" (cotización, sin cobrar)</label>
+          <textarea
+            value={config.plantillaWhatsAppCotizacion || ''}
+            onChange={e => set('plantillaWhatsAppCotizacion', e.target.value)}
+            rows={3}
+            className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 text-sm"
+          />
+          <p className="text-xs text-stone-400 mt-1">
+            Variables: <code className="bg-stone-100 px-1 rounded">{'{nombre}'}</code> <code className="bg-stone-100 px-1 rounded">{'{periodos}'}</code> <code className="bg-stone-100 px-1 rounded">{'{instituto}'}</code> <code className="bg-stone-100 px-1 rounded">{'{detalle}'}</code> <code className="bg-stone-100 px-1 rounded">{'{total}'}</code> <code className="bg-stone-100 px-1 rounded">{'{totalTransferencia}'}</code>
           </p>
         </div>
       </div>
