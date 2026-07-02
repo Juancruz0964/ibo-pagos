@@ -108,7 +108,10 @@ const initialState = {
     plantillaWhatsAppSaldo: 'Hola {nombre}! Confirmamos el pago del saldo pendiente de {periodo} ({monto} en {medio}) en {instituto}. ¡Cuota saldada!',
     plantillaWhatsAppCotizacion: 'Hola {nombre}! El importe de {periodos} en {instituto} es:\n{detalle}\nTotal: {total} (efectivo) / {totalTransferencia} (transferencia o MP).',
     plantillaWhatsAppParticular: 'Hola {nombre}! Se agendó la clase el día {fecha} a la {hora} con el profesor/a {profesor}.',
-    plantillaWhatsAppParticularDeuda: 'Hola {nombre}! Nos quedaron pendientes de pago las clases del {fechas} en {instituto}. Cualquier consulta escribinos, ¡gracias!'
+    plantillaWhatsAppParticularDeuda: 'Hola {nombre}! Nos quedaron pendientes de pago las clases del {fechas} en {instituto}. Cualquier consulta escribinos, ¡gracias!',
+    precioClaseProfe: 0,
+    precioClaseNativo30: 0,
+    precioClaseNativo60: 0
   }
 };
 
@@ -3108,6 +3111,42 @@ const fmtFechaCorta = (isoFecha) => {
   return `${dia}/${mes}`;
 };
 
+// Precio de una clase particular según modalidad/duración configurados en Configuración
+const precioClaseParticular = (p, cfg) => {
+  if (p.modalidad === 'nativo') {
+    return Number(p.duracionMin) === 30 ? Number(cfg.precioClaseNativo30 || 0) : Number(cfg.precioClaseNativo60 || 0);
+  }
+  return Number(cfg.precioClaseProfe || 0);
+};
+
+// Cuenta corriente de un alumno particular: cada clase dada (asistió o faltó sin
+// avisar) es un cargo; cada pago recibido es un crédito que se aplica a los
+// cargos más viejos primero (FIFO). Lo que queda sin cubrir son las clases
+// pendientes de pago; si sobra crédito después de cubrir todo, es saldo a favor.
+const estadoCuentaParticular = (p, cfg) => {
+  const cargos = [];
+  (p.historial || []).forEach(h => {
+    if (h.estado === 'cancelado_aviso') return;
+    if (h.monto !== undefined) {
+      cargos.push({ fecha: h.fecha, monto: Number(h.monto) || 0 });
+    } else if (!h.pagada) {
+      // Registro previo a la cuenta corriente (sin monto guardado): se toma el precio actual
+      cargos.push({ fecha: h.fecha, monto: precioClaseParticular(p, cfg) });
+    }
+  });
+  cargos.sort((a, b) => a.fecha.localeCompare(b.fecha));
+  const totalPagos = (p.pagos || []).reduce((s, pg) => s + (Number(pg.monto) || 0), 0);
+  let pool = totalPagos;
+  const pendientes = [];
+  cargos.forEach(c => {
+    if (pool >= c.monto) { pool -= c.monto; }
+    else { pendientes.push({ fecha: c.fecha, monto: c.monto - Math.max(pool, 0) }); pool = 0; }
+  });
+  const totalPendiente = pendientes.reduce((s, x) => s + x.monto, 0);
+  const aFavor = pendientes.length === 0 ? pool : 0;
+  return { saldo: totalPendiente - aFavor, pendientes, totalPendiente, aFavor };
+};
+
 function ParticularesTab({ data, update }) {
   const [subView, setSubView] = useState('lista'); // 'lista' | 'agenda'
   const [editing, setEditing] = useState(null);
@@ -3138,30 +3177,36 @@ function ParticularesTab({ data, update }) {
     }
   };
 
-  // Marca la sesión de ESTA semana (según el día configurado) como pagada o no.
-  // Si no se pagó, la fecha queda guardada en fechasAdeudadas para reclamarla después.
   // Registra qué pasó con la clase de una fecha puntual: asistió, canceló con
   // aviso (no se cobra) o faltó sin avisar (se cobra igual). Si ya había un
-  // registro para esa fecha, lo reemplaza.
+  // registro para esa fecha, lo reemplaza. El monto se toma del precio vigente
+  // configurado según modalidad/duración y queda fijo en ese registro.
   const registrarSesion = (id, fecha, estado) => {
     update({
       alumnosParticulares: particulares.map(p => {
         if (p.id !== id) return p;
         const historial = (p.historial || []).filter(h => h.fecha !== fecha);
-        // Canceló con aviso: no corresponde cobrarla, nunca queda como deuda
-        const pagada = estado === 'cancelado_aviso';
-        return { ...p, historial: [...historial, { fecha, estado, pagada }] };
+        const monto = estado === 'cancelado_aviso' ? 0 : precioClaseParticular(p, data.configuracion);
+        return { ...p, historial: [...historial, { fecha, estado, monto }] };
       })
     });
   };
 
-  // Marca (o desmarca) el pago de una fecha ya registrada en el historial
-  const marcarPagadaHistorial = (id, fecha, pagada) => {
+  // Cuenta corriente: registra un pago (no atado a una clase puntual, se aplica
+  // automáticamente a las clases más viejas sin cubrir)
+  const registrarPago = (id, fecha, monto) => {
     update({
-      alumnosParticulares: particulares.map(p => {
-        if (p.id !== id) return p;
-        return { ...p, historial: (p.historial || []).map(h => h.fecha === fecha ? { ...h, pagada } : h) };
-      })
+      alumnosParticulares: particulares.map(p =>
+        p.id === id ? { ...p, pagos: [...(p.pagos || []), { id: uid(), fecha, monto: Number(monto) }] } : p
+      )
+    });
+  };
+
+  const quitarPago = (id, pagoId) => {
+    update({
+      alumnosParticulares: particulares.map(p =>
+        p.id === id ? { ...p, pagos: (p.pagos || []).filter(pg => pg.id !== pagoId) } : p
+      )
     });
   };
 
@@ -3201,8 +3246,8 @@ function ParticularesTab({ data, update }) {
   };
 
   const reclamarDeuda = (p) => {
-    const adeudadas = (p.historial || []).filter(h => !h.pagada && h.estado !== 'cancelado_aviso').map(h => h.fecha);
-    const fechas = adeudadas.slice().sort().map(fmtFechaCorta).join(', ');
+    const { pendientes } = estadoCuentaParticular(p, data.configuracion);
+    const fechas = pendientes.slice().sort((a, b) => a.fecha.localeCompare(b.fecha)).map(x => fmtFechaCorta(x.fecha)).join(', ');
     if (!fechas) return;
     const cfg = data.configuracion;
     const template = cfg.plantillaWhatsAppParticularDeuda ||
@@ -3294,8 +3339,7 @@ function ParticularesTab({ data, update }) {
             <div className="divide-y divide-stone-100">
               {filtered.map(p => {
                 const superpuesto = seSuperpone(p);
-                const historial = p.historial || [];
-                const adeudadas = historial.filter(h => !h.pagada && h.estado !== 'cancelado_aviso');
+                const { saldo, pendientes } = estadoCuentaParticular(p, data.configuracion);
                 return (
                   <div key={p.id} className={`flex items-center gap-3 px-5 py-3 hover:bg-stone-50 ${!p.activo ? 'opacity-50' : ''}`}>
                     <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${p.modalidad === 'nativo' ? 'bg-sky-100 text-sky-700' : 'bg-emerald-100 text-emerald-700'}`}>
@@ -3312,9 +3356,9 @@ function ParticularesTab({ data, update }) {
                             <AlertCircle size={11} /> Superpuesto
                           </span>
                         )}
-                        {adeudadas.length > 0 && (
+                        {saldo > 0 && (
                           <span className="text-xs px-1.5 py-0.5 bg-red-50 text-red-700 rounded font-semibold">
-                            Adeuda {adeudadas.length} clase{adeudadas.length !== 1 ? 's' : ''}
+                            Debe {fmtMoney(saldo)} ({pendientes.length} clase{pendientes.length !== 1 ? 's' : ''})
                           </span>
                         )}
                         {!p.activo && <span className="text-xs px-1.5 py-0.5 bg-stone-200 text-stone-600 rounded">Inactivo</span>}
@@ -3407,10 +3451,12 @@ function ParticularesTab({ data, update }) {
       {viendoPerfil && (
         <ParticularPerfilModal
           particular={viendoPerfil}
+          configuracion={data.configuracion}
           estadosSesion={ESTADOS_SESION}
           onRegistrar={(fecha, estado) => registrarSesion(viendoPerfil.id, fecha, estado)}
-          onMarcarPagada={(fecha, pagada) => marcarPagadaHistorial(viendoPerfil.id, fecha, pagada)}
           onQuitar={(fecha) => quitarHistorial(viendoPerfil.id, fecha)}
+          onRegistrarPago={(fecha, monto) => registrarPago(viendoPerfil.id, fecha, monto)}
+          onQuitarPago={(pagoId) => quitarPago(viendoPerfil.id, pagoId)}
           onReclamar={() => reclamarDeuda(viendoPerfil)}
           onClose={() => setViendoPerfilId(null)}
         />
@@ -3422,11 +3468,24 @@ function ParticularesTab({ data, update }) {
 // Perfil de un alumno particular: registrar clases (con fecha elegida a mano,
 // no solo "esta semana", por si el horario no se mantiene siempre igual) y
 // ver el historial completo de asistencia y pagos en un solo lugar.
-function ParticularPerfilModal({ particular: p, estadosSesion, onRegistrar, onMarcarPagada, onQuitar, onReclamar, onClose }) {
+function ParticularPerfilModal({ particular: p, configuracion, estadosSesion, onRegistrar, onQuitar, onRegistrarPago, onQuitarPago, onReclamar, onClose }) {
   const [fechaElegida, setFechaElegida] = useState(p.dia ? fechaSesionActual(p.dia) : today());
+  const [pagando, setPagando] = useState(false);
+  const [montoPago, setMontoPago] = useState('');
+  const [fechaPago, setFechaPago] = useState(today());
   const historial = p.historial || [];
+  const pagos = p.pagos || [];
   const entrada = historial.find(h => h.fecha === fechaElegida);
-  const adeudadas = historial.filter(h => !h.pagada && h.estado !== 'cancelado_aviso');
+  const { saldo, pendientes, aFavor } = estadoCuentaParticular(p, configuracion);
+  const pendientesSet = new Set(pendientes.map(x => x.fecha));
+
+  const guardarPago = () => {
+    const monto = Number(montoPago);
+    if (!monto || monto <= 0) return;
+    onRegistrarPago(fechaPago, monto);
+    setMontoPago('');
+    setPagando(false);
+  };
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 overflow-y-auto">
@@ -3442,6 +3501,66 @@ function ParticularPerfilModal({ particular: p, estadosSesion, onRegistrar, onMa
         </div>
 
         <div className="p-6 space-y-5">
+          <div className={`rounded-xl p-4 border ${saldo > 0 ? 'bg-red-50 border-red-200' : 'bg-emerald-50 border-emerald-200'}`}>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div>
+                <label className="text-xs font-medium uppercase tracking-wider text-stone-500">Cuenta corriente</label>
+                <p className={`text-xl font-semibold mt-0.5 ${saldo > 0 ? 'text-red-700' : 'text-emerald-700'}`}>
+                  {saldo > 0 ? `Debe ${fmtMoney(saldo)}` : aFavor > 0 ? `A favor ${fmtMoney(aFavor)}` : 'Al día'}
+                </p>
+              </div>
+              <button
+                onClick={() => setPagando(v => !v)}
+                className="text-sm px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg font-medium"
+              >
+                Registrar un pago
+              </button>
+            </div>
+
+            {pagando && (
+              <div className="flex items-end gap-2 mt-3 flex-wrap">
+                <div>
+                  <label className="text-xs text-stone-500">Monto</label>
+                  <input
+                    type="number"
+                    value={montoPago}
+                    onChange={e => setMontoPago(e.target.value)}
+                    placeholder="$"
+                    className="w-28 mt-0.5 px-2 py-1.5 rounded-lg border border-stone-200 bg-white text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-stone-500">Fecha</label>
+                  <input
+                    type="date"
+                    value={fechaPago}
+                    onChange={e => setFechaPago(e.target.value)}
+                    className="mt-0.5 px-2 py-1.5 rounded-lg border border-stone-200 bg-white text-sm"
+                  />
+                </div>
+                <button onClick={guardarPago} className="text-sm px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg font-medium">
+                  Guardar
+                </button>
+              </div>
+            )}
+
+            {pendientes.length > 0 && (
+              <div className="flex items-center gap-2 flex-wrap mt-3">
+                {pendientes.slice().sort((a, b) => a.fecha.localeCompare(b.fecha)).map(x => (
+                  <span key={x.fecha} className="text-xs px-2 py-0.5 bg-white text-red-700 rounded-full border border-red-200">
+                    {fmtFechaCorta(x.fecha)} · {fmtMoney(x.monto)}
+                  </span>
+                ))}
+                <button
+                  onClick={onReclamar}
+                  className="text-xs px-2 py-0.5 bg-stone-700 hover:bg-stone-800 text-white rounded-full flex items-center gap-1"
+                >
+                  <MessageCircle size={11} /> Reclamar por WhatsApp
+                </button>
+              </div>
+            )}
+          </div>
+
           <div>
             <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Registrar una clase</label>
             <p className="text-xs text-stone-400 mt-0.5 mb-2">
@@ -3459,19 +3578,9 @@ function ParticularPerfilModal({ particular: p, estadosSesion, onRegistrar, onMa
                   {estadosSesion[entrada.estado].label}
                 </span>
                 {entrada.estado !== 'cancelado_aviso' && (
-                  entrada.pagada ? (
-                    <span className="text-xs text-emerald-600 font-medium">Pagada ✓</span>
-                  ) : (
-                    <>
-                      <span className="text-xs text-red-600 font-medium">Pendiente de pago</span>
-                      <button
-                        onClick={() => onMarcarPagada(fechaElegida, true)}
-                        className="text-xs px-2 py-1 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 rounded-lg font-medium"
-                      >
-                        Ya la pagó
-                      </button>
-                    </>
-                  )
+                  <span className={pendientesSet.has(entrada.fecha) ? 'text-xs text-red-600 font-medium' : 'text-xs text-emerald-600 font-medium'}>
+                    {fmtMoney(entrada.monto ?? precioClaseParticular(p, configuracion))} {pendientesSet.has(entrada.fecha) ? '· pendiente' : '· cubierta'}
+                  </span>
                 )}
                 <button
                   onClick={() => onQuitar(fechaElegida)}
@@ -3504,32 +3613,31 @@ function ParticularPerfilModal({ particular: p, estadosSesion, onRegistrar, onMa
             )}
           </div>
 
-          {adeudadas.length > 0 && (
-            <div>
-              <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Clases adeudadas</label>
-              <div className="flex items-center gap-2 flex-wrap mt-2">
-                {adeudadas.slice().sort((a, b) => a.fecha.localeCompare(b.fecha)).map(h => (
-                  <button
-                    key={h.fecha}
-                    onClick={() => onMarcarPagada(h.fecha, true)}
-                    title={`${estadosSesion[h.estado].label} — click para marcar como pagada`}
-                    className="text-xs px-2 py-0.5 bg-red-50 text-red-700 hover:bg-red-100 rounded-full border border-red-200"
-                  >
-                    {fmtFechaCorta(h.fecha)} ✕
-                  </button>
+          <div>
+            <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Pagos registrados ({pagos.length})</label>
+            {pagos.length === 0 ? (
+              <p className="text-xs text-stone-400 mt-2">Sin pagos registrados todavía.</p>
+            ) : (
+              <div className="mt-2 flex flex-col gap-1.5">
+                {[...pagos].sort((a, b) => b.fecha.localeCompare(a.fecha)).map(pg => (
+                  <div key={pg.id} className="flex items-center gap-2 text-xs">
+                    <span className="font-medium text-stone-700 w-10">{fmtFechaCorta(pg.fecha)}</span>
+                    <span className="text-emerald-700 font-medium">{fmtMoney(pg.monto)}</span>
+                    <button
+                      onClick={() => onQuitarPago(pg.id)}
+                      title="Quitar este pago (si se cargó por error)"
+                      className="text-stone-300 hover:text-red-500 ml-auto"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
                 ))}
-                <button
-                  onClick={onReclamar}
-                  className="text-xs px-2 py-0.5 bg-stone-700 hover:bg-stone-800 text-white rounded-full flex items-center gap-1"
-                >
-                  <MessageCircle size={11} /> Reclamar por WhatsApp
-                </button>
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           <div>
-            <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Historial completo ({historial.length})</label>
+            <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Historial de clases ({historial.length})</label>
             {historial.length === 0 ? (
               <p className="text-xs text-stone-400 mt-2">Sin clases registradas todavía.</p>
             ) : (
@@ -3541,8 +3649,8 @@ function ParticularPerfilModal({ particular: p, estadosSesion, onRegistrar, onMa
                       <span className="font-medium text-stone-700 w-10">{fmtFechaCorta(h.fecha)}</span>
                       <span className={`px-1.5 py-0.5 rounded ${info.badgeClass}`}>{info.label}</span>
                       {h.estado !== 'cancelado_aviso' && (
-                        <span className={h.pagada ? 'text-emerald-600' : 'text-red-600'}>
-                          {h.pagada ? 'Pagada ✓' : 'Pendiente de pago'}
+                        <span className={pendientesSet.has(h.fecha) ? 'text-red-600' : 'text-emerald-600'}>
+                          {fmtMoney(h.monto ?? precioClaseParticular(p, configuracion))} {pendientesSet.has(h.fecha) ? '· pendiente' : '· cubierta'}
                         </span>
                       )}
                       <button
@@ -4320,6 +4428,27 @@ function ConfigTab({ data, update }) {
           <p className="text-xs text-stone-400 mt-1">
             Variables: <code className="bg-stone-100 px-1 rounded">{'{nombre}'}</code> <code className="bg-stone-100 px-1 rounded">{'{fechas}'}</code> <code className="bg-stone-100 px-1 rounded">{'{instituto}'}</code>
           </p>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-stone-200 p-6 space-y-4">
+        <div>
+          <h2 className="font-semibold">Precio de clases particulares</h2>
+          <p className="text-sm text-stone-500 mt-0.5">Valor de cada clase individual, usado para calcular la cuenta corriente de cada alumno particular.</p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Con profesor (60 min)</label>
+            <input type="number" value={config.precioClaseProfe} onChange={e => set('precioClaseProfe', Number(e.target.value))} className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 text-sm" />
+          </div>
+          <div>
+            <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Nativo (30 min)</label>
+            <input type="number" value={config.precioClaseNativo30} onChange={e => set('precioClaseNativo30', Number(e.target.value))} className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 text-sm" />
+          </div>
+          <div>
+            <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Nativo (60 min)</label>
+            <input type="number" value={config.precioClaseNativo60} onChange={e => set('precioClaseNativo60', Number(e.target.value))} className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 text-sm" />
+          </div>
         </div>
       </div>
 
