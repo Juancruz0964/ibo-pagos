@@ -600,7 +600,19 @@ function PagosTab({ data, update }) {
         observaciones: ''
       };
     });
-    update({ pagos: [...data.pagos, ...newPagos] });
+    // Saldo a favor: se descuenta el crédito que se haya aplicado a alguna
+    // cuota y se suma lo que el alumno haya pagado de más para dejarlo
+    // guardado para el próximo mes.
+    const deltaSaldoPorAlumno = {};
+    selectedPeriodos.forEach(sp => {
+      const detalle = paymentDetails.perAlumno[sp.alumnoId]?.[sp.periodoId];
+      const delta = (detalle?.extraAFavor || 0) - (detalle?.creditoAplicado || 0);
+      if (delta !== 0) deltaSaldoPorAlumno[sp.alumnoId] = (deltaSaldoPorAlumno[sp.alumnoId] || 0) + delta;
+    });
+    const alumnosActualizados = Object.keys(deltaSaldoPorAlumno).length === 0
+      ? data.alumnos
+      : data.alumnos.map(a => deltaSaldoPorAlumno[a.id] ? { ...a, saldoAFavor: Math.max(0, (a.saldoAFavor || 0) + deltaSaldoPorAlumno[a.id]) } : a);
+    update({ pagos: [...data.pagos, ...newPagos], alumnos: alumnosActualizados });
   };
 
   const saveAlumnoFromPagos = (alumno) => {
@@ -1352,6 +1364,7 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
   const [metodoPorLinea, setMetodoPorLinea] = useState({});
   const [modalidadPorLinea, setModalidadPorLinea] = useState({}); // 'total' | 'parcial'
   const [montoParcialPorLinea, setMontoParcialPorLinea] = useState({});
+  const [montoExtraPorLinea, setMontoExtraPorLinea] = useState({}); // pago de más, queda a favor del próximo mes
 
   const keyOf = (sp) => `${sp.alumnoId}-${sp.periodoId}-${sp.anio}`;
 
@@ -1374,11 +1387,36 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
     return getMetodo(l) === 'efectivo' ? (l.calc.efectivo || 0) : (l.calc.transferencia || 0);
   };
 
-  // Monto a cobrar según modalidad
+  // Saldo a favor de cada alumno (de meses anteriores) que se va descontando
+  // automáticamente de las cuotas "pago total", en el orden en que aparecen
+  // las líneas. Si un alumno tiene varias líneas en este mismo cobro, el
+  // crédito se va consumiendo entre ellas.
+  const creditoAplicadoPorLinea = useMemo(() => {
+    const pool = {};
+    const result = {};
+    lineas.forEach(l => {
+      if (l.calc?.error || l.esSaldo || getModalidad(l) !== 'total') return;
+      const alumnoId = l.alumnoId;
+      if (!(alumnoId in pool)) pool[alumnoId] = Number(l.alumno?.saldoAFavor) || 0;
+      const precioTotal = getPrecioTotal(l);
+      const aplicado = Math.min(pool[alumnoId], precioTotal);
+      pool[alumnoId] -= aplicado;
+      result[keyOf(l)] = aplicado;
+    });
+    return result;
+  }, [lineas, modalidadPorLinea, metodoPorLinea]);
+
+  const getCreditoAplicado = (l) => creditoAplicadoPorLinea[keyOf(l)] || 0;
+  const getMontoExtra = (l) => Number(montoExtraPorLinea[keyOf(l)]) || 0;
+  const setMontoExtra = (l, val) => setMontoExtraPorLinea({ ...montoExtraPorLinea, [keyOf(l)]: val });
+
+  // Monto a cobrar según modalidad (lo que efectivamente se recibe hoy: en
+  // "total" se descuenta el saldo a favor disponible y se suma lo que el
+  // alumno haya pagado de más, para dejarlo a favor del próximo mes)
   const getMontoCobrar = (l) => {
     if (l.esSaldo) return l.montoSaldo || 0;
     const mod = getModalidad(l);
-    if (mod === 'total') return getPrecioTotal(l);
+    if (mod === 'total') return Math.max(0, getPrecioTotal(l) - getCreditoAplicado(l) + getMontoExtra(l));
     // parcial
     const k = keyOf(l);
     return Number(montoParcialPorLinea[k]) || 0;
@@ -1396,7 +1434,10 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
       if (l.calc?.error) return;
       const monto = getMontoCobrar(l);
       const precioTotal = getPrecioTotal(l);
+      const modalidad = getModalidad(l);
       const metodo = l.esSaldo ? 'transferencia' : getMetodo(l);
+      const creditoAplicado = modalidad === 'total' ? getCreditoAplicado(l) : 0;
+      const extraAFavor = modalidad === 'total' ? getMontoExtra(l) : 0;
       total += monto || 0;
       if (!detallePorAlumno[l.alumnoId]) detallePorAlumno[l.alumnoId] = { alumno: l.alumno, items: [], total: 0 };
       detallePorAlumno[l.alumnoId].items.push({
@@ -1405,15 +1446,21 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
         monto,
         precioTotal,
         metodo,
-        modalidad: getModalidad(l), // 'total' | 'parcial' | 'saldo'
+        modalidad, // 'total' | 'parcial' | 'saldo'
         esSaldo: !!l.esSaldo,
+        // Valor que se acredita a la cuota en sí (para marcarla pagada): en
+        // "total" es siempre el precio de lista, aunque una parte se haya
+        // cubierto con saldo a favor en vez de plata nueva
+        valorAplicado: modalidad === 'total' ? precioTotal : monto,
+        creditoAplicado,
+        extraAFavor,
         // Para mostrar saldo restante después del pago en mensajes:
         saldoRestante: Math.max(0, precioTotal - monto)
       });
       detallePorAlumno[l.alumnoId].total += monto;
     });
     return { total, detallePorAlumno };
-  }, [lineas, metodoPorLinea, modalidadPorLinea, montoParcialPorLinea]);
+  }, [lineas, metodoPorLinea, modalidadPorLinea, montoParcialPorLinea, montoExtraPorLinea, creditoAplicadoPorLinea]);
 
   // Distribución mixta
   const [distribuciones, setDistribuciones] = useState({ efectivo: 0, mp: 0, transferencia: 0 });
@@ -1505,13 +1552,18 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
     if (totalesItems.length > 0) {
       const periodos = totalesItems.map(it => `${it.periodo.full} ${it.anio}`).join(', ');
       const totalMonto = totalesItems.reduce((s, it) => s + it.monto, 0);
-      partes.push(replaceVars(cfg.plantillaWhatsApp, {
+      let mensaje = replaceVars(cfg.plantillaWhatsApp, {
         nombre: alumno.contactoNombre || alumno.nombre,
         periodos,
         instituto: inst,
         total: fmtMoney(totalMonto),
         medio
-      }));
+      });
+      const creditoUsado = totalesItems.reduce((s, it) => s + (it.creditoAplicado || 0), 0);
+      const extraDejado = totalesItems.reduce((s, it) => s + (it.extraAFavor || 0), 0);
+      if (creditoUsado > 0) mensaje += ` (se descontaron ${fmtMoney(creditoUsado)} de saldo a favor)`;
+      if (extraDejado > 0) mensaje += ` (quedan ${fmtMoney(extraDejado)} a favor para el próximo mes)`;
+      partes.push(mensaje);
     }
 
     parciales.forEach(it => {
@@ -1557,9 +1609,11 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
         Object.entries(totales.detallePorAlumno).map(([id, d]) => [
           id,
           Object.fromEntries(d.items.map(it => [it.periodo.id, {
-            monto: it.monto,
+            monto: it.valorAplicado,
             metodo: it.metodo,
-            precioFijado: it.esSaldo ? null : it.precioTotal // null = no sobrescribir, mantener el existente
+            precioFijado: it.esSaldo ? null : it.precioTotal, // null = no sobrescribir, mantener el existente
+            creditoAplicado: it.creditoAplicado || 0,
+            extraAFavor: it.extraAFavor || 0
           }]))
         ])
       )
@@ -1896,6 +1950,41 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
                         </div>
                       );
                     })()}
+
+                    {modalidad === 'total' && (() => {
+                      const creditoAplicado = getCreditoAplicado(l);
+                      const extra = getMontoExtra(l);
+                      const mostrandoExtra = extra > 0 || (montoExtraPorLinea[k] !== undefined);
+                      return (
+                        <div className="mt-3 space-y-2">
+                          {creditoAplicado > 0 && (
+                            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-xs text-emerald-800 flex justify-between">
+                              <span>Tiene {fmtMoney(l.alumno.saldoAFavor || 0)} a favor · se descuentan {fmtMoney(creditoAplicado)}</span>
+                              <strong>Cobra hoy: {fmtMoney(Math.max(0, precioTotal - creditoAplicado + extra))}</strong>
+                            </div>
+                          )}
+                          {mostrandoExtra ? (
+                            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-1">
+                              <label className="text-xs text-amber-800 font-medium">Pagó de más (queda a favor del próximo mes)</label>
+                              <input
+                                type="number"
+                                value={montoExtraPorLinea[k] || ''}
+                                placeholder="$"
+                                onChange={e => setMontoExtra(l, e.target.value)}
+                                className="w-full px-3 py-2 rounded-lg border border-amber-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-200"
+                              />
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setMontoExtra(l, '')}
+                              className="text-xs text-stone-500 hover:text-emerald-700 underline"
+                            >
+                              ¿Pagó de más? Dejar un adicional a favor del próximo mes
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               );
@@ -2141,6 +2230,7 @@ function AlumnosTab({ data, update }) {
                           {fullName(a)}
                           {!a.activo && <span className="text-xs px-1.5 py-0.5 bg-stone-200 text-stone-600 rounded">Inactivo</span>}
                           {grupo && <span className="text-xs px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded flex items-center gap-1"><Home size={10} />{grupo.nombre}</span>}
+                          {a.saldoAFavor > 0 && <span className="text-xs px-1.5 py-0.5 bg-sky-50 text-sky-700 rounded font-medium">A favor {fmtMoney(a.saldoAFavor)}</span>}
                         </div>
                         <div className="text-xs text-stone-500 truncate">
                           {curso?.nombre || 'Sin curso'} · {a.horarioCurso || (a.dia ? `${a.dia} ${a.horario || ''}` : 'Sin horario')} · DNI {a.dni}
@@ -2793,7 +2883,16 @@ function AlumnoCuotasModal({ alumno, data, update, onClose, onEdit }) {
         observaciones: ''
       };
     });
-    update({ pagos: [...data.pagos, ...newPagos] });
+    const deltaSaldoPorAlumno = {};
+    selectedPeriodos.forEach(sp => {
+      const detalle = paymentDetails.perAlumno[sp.alumnoId]?.[sp.periodoId];
+      const delta = (detalle?.extraAFavor || 0) - (detalle?.creditoAplicado || 0);
+      if (delta !== 0) deltaSaldoPorAlumno[sp.alumnoId] = (deltaSaldoPorAlumno[sp.alumnoId] || 0) + delta;
+    });
+    const alumnosActualizados = Object.keys(deltaSaldoPorAlumno).length === 0
+      ? data.alumnos
+      : data.alumnos.map(a => deltaSaldoPorAlumno[a.id] ? { ...a, saldoAFavor: Math.max(0, (a.saldoAFavor || 0) + deltaSaldoPorAlumno[a.id]) } : a);
+    update({ pagos: [...data.pagos, ...newPagos], alumnos: alumnosActualizados });
   };
 
   const closePaymentModal = () => {
