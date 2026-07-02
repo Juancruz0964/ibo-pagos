@@ -304,9 +304,20 @@ const datosFaltantes = (alumno) => {
   return faltan;
 };
 
-// Verifica si una cuota fue anulada (alumno no debe ese periodo, ej: empezó más tarde)
+// Verifica si una cuota fue anulada: manualmente, o automáticamente porque el
+// período es anterior a la fecha de alta del alumno (no correspondía todavía).
 const esCuotaAnulada = (alumno, periodoId, anio) => {
-  return (alumno.cuotasAnuladas || []).includes(`${periodoId}-${anio}`);
+  if ((alumno.cuotasAnuladas || []).includes(`${periodoId}-${anio}`)) return true;
+  if (alumno.fechaAlta) {
+    const periodo = PERIODOS.find(p => p.id === periodoId);
+    if (periodo && periodo.mes > 0) {
+      const alta = new Date(alumno.fechaAlta + 'T00:00:00');
+      const altaAnio = alta.getFullYear();
+      const altaMes = alta.getMonth() + 1;
+      if (anio < altaAnio || (anio === altaAnio && periodo.mes < altaMes)) return true;
+    }
+  }
+  return false;
 };
 
 // Verifica si un periodo está pagado (mantenida por compatibilidad)
@@ -1924,17 +1935,23 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
 // ALUMNOS TAB
 // ============================================================
 function AlumnosTab({ data, update }) {
-  const [subTab, setSubTab] = useState('lista'); // 'lista' | 'grupos'
+  const [subTab, setSubTab] = useState('lista'); // 'lista' | 'grupos' | 'inactivos'
   const [editing, setEditing] = useState(null);
   const [completando, setCompletando] = useState(null);
   const [viendoCuotasId, setViendoCuotasId] = useState(null);
   const viendoCuotas = data.alumnos.find(a => a.id === viendoCuotasId) || null;
+  const [dandoAltaId, setDandoAltaId] = useState(null);
+  const dandoAlta = data.alumnos.find(a => a.id === dandoAltaId) || null;
   const [query, setQuery] = useState('');
   const [filtroCurso, setFiltroCurso] = useState('todos');
   const [mostrarInactivos, setMostrarInactivos] = useState(false);
   const [soloIncompletos, setSoloIncompletos] = useState(false);
 
   const incompletos = useMemo(() => data.alumnos.filter(a => a.activo && datosFaltantes(a).length > 0), [data.alumnos]);
+  const inactivos = useMemo(() =>
+    data.alumnos.filter(a => !a.activo).sort((a, b) => (a.apellido + a.nombre).localeCompare(b.apellido + b.nombre)),
+    [data.alumnos]
+  );
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
@@ -1972,8 +1989,9 @@ function AlumnosTab({ data, update }) {
     }
   };
 
-  const restoreAlumno = (id) => {
-    update({ alumnos: data.alumnos.map(a => a.id === id ? { ...a, activo: true } : a) });
+  const darDeAlta = (id, fechaAlta) => {
+    update({ alumnos: data.alumnos.map(a => a.id === id ? { ...a, activo: true, fechaAlta } : a) });
+    setDandoAltaId(null);
   };
 
   return (
@@ -1983,7 +2001,8 @@ function AlumnosTab({ data, update }) {
         <div className="flex gap-1 border-b border-stone-200 -mx-6 px-6 -mt-6 pt-4 mb-0">
           {[
             { id: 'lista', label: 'Alumnos' },
-            { id: 'grupos', label: `Grupos familiares${data.gruposFamiliares.length > 0 ? ' · ' + data.gruposFamiliares.length : ''}` }
+            { id: 'grupos', label: `Grupos familiares${data.gruposFamiliares.length > 0 ? ' · ' + data.gruposFamiliares.length : ''}` },
+            { id: 'inactivos', label: `Inactivos${inactivos.length > 0 ? ' · ' + inactivos.length : ''}` }
           ].map(t => (
             <button
               key={t.id}
@@ -2099,8 +2118,8 @@ function AlumnosTab({ data, update }) {
                           <Trash2 size={16} />
                         </button>
                       ) : (
-                        <button onClick={() => restoreAlumno(a.id)} className="text-xs px-2 py-1 text-emerald-700 hover:bg-emerald-50 rounded">
-                          Restaurar
+                        <button onClick={() => setDandoAltaId(a.id)} className="text-xs px-2 py-1 text-emerald-700 hover:bg-emerald-50 rounded">
+                          Dar de alta
                         </button>
                       )}
                     </div>
@@ -2143,6 +2162,49 @@ function AlumnosTab({ data, update }) {
 
       {subTab === 'grupos' && (
         <GruposFamiliaresView data={data} update={update} />
+      )}
+
+      {subTab === 'inactivos' && (
+        <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden">
+          {inactivos.length === 0 ? (
+            <div className="p-12 text-center text-stone-400 text-sm">No hay alumnos dados de baja</div>
+          ) : (
+            <div className="divide-y divide-stone-100">
+              {inactivos.map(a => {
+                const curso = data.cursos.find(c => c.id === a.cursoId);
+                return (
+                  <div key={a.id} className="flex items-center gap-3 px-5 py-3 hover:bg-stone-50 opacity-75">
+                    <Avatar alumno={a} />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm">{fullName(a)}</div>
+                      <div className="text-xs text-stone-500 truncate">
+                        {curso?.nombre || 'Sin curso'} · DNI {a.dni}
+                        {a.fechaAlta && <> · Última alta: {a.fechaAlta}</>}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setDandoAltaId(a.id)}
+                      className="bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 whitespace-nowrap"
+                    >
+                      <UserPlus size={14} /> Dar de alta
+                    </button>
+                    <button onClick={() => setEditing(a)} className="p-2 text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-lg">
+                      <Edit2 size={16} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {dandoAlta && (
+        <DarDeAltaModal
+          alumno={dandoAlta}
+          onConfirm={(fecha) => darDeAlta(dandoAlta.id, fecha)}
+          onClose={() => setDandoAltaId(null)}
+        />
       )}
     </div>
   );
@@ -2494,6 +2556,7 @@ function AlumnoForm({ alumno, data, update, onSave, onClose }) {
             <Field label="Celular principal" value={form.celular} onChange={v => set('celular', v)} hint="Sin 0 ni 15. Ej: 1145678901" />
             <Field label="Nombre padre/madre/tutor" value={form.contactoNombre} onChange={v => set('contactoNombre', v)} hint="A quién corresponde el celular principal" />
             <Field label="Celular alternativo" value={form.celularAlternativo} onChange={v => set('celularAlternativo', v)} />
+            <Field label="Fecha de alta" type="date" value={form.fechaAlta} onChange={v => set('fechaAlta', v)} hint="Las cuotas anteriores no figuran como adeudadas" />
           </div>
 
           {dniCoincidente && !recuperado && (
@@ -2793,6 +2856,39 @@ function ContactoNombreInline({ label, onSave }) {
       <button onClick={guardar} className="px-2 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-medium whitespace-nowrap">
         Guardar
       </button>
+    </div>
+  );
+}
+
+// Modal para reactivar un alumno dado de baja, pidiendo la fecha de alta.
+// Los meses anteriores a esa fecha no van a figurar como adeudados.
+function DarDeAltaModal({ alumno, onConfirm, onClose }) {
+  const [fecha, setFecha] = useState(today());
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl max-w-sm w-full">
+        <div className="border-b border-stone-200 px-6 py-4 flex items-center justify-between">
+          <h2 className="font-semibold">Dar de alta a {fullName(alumno)}</h2>
+          <button onClick={onClose}><X size={20} /></button>
+        </div>
+        <div className="p-6 space-y-4">
+          <Field label="Fecha de alta" type="date" value={fecha} onChange={setFecha} />
+          <p className="text-xs text-stone-500">
+            Las cuotas de los meses anteriores a esta fecha no van a figurar como adeudadas para este alumno.
+          </p>
+          <div className="flex gap-2 pt-2">
+            <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-lg border border-stone-200 hover:bg-stone-50 font-medium text-sm">Cancelar</button>
+            <button
+              onClick={() => onConfirm(fecha)}
+              disabled={!fecha}
+              className="flex-1 px-4 py-2.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-medium text-sm disabled:opacity-50"
+            >
+              Confirmar alta
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
