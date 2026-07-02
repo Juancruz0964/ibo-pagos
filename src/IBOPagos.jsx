@@ -107,7 +107,8 @@ const initialState = {
     plantillaWhatsAppParcial: 'Hola {nombre}! Recibimos un pago parcial de {monto} ({medio}) para la cuota de {periodo} en {instituto}. Saldo pendiente: {saldo}. ¡Gracias!',
     plantillaWhatsAppSaldo: 'Hola {nombre}! Confirmamos el pago del saldo pendiente de {periodo} ({monto} en {medio}) en {instituto}. ¡Cuota saldada!',
     plantillaWhatsAppCotizacion: 'Hola {nombre}! El importe de {periodos} en {instituto} es:\n{detalle}\nTotal: {total} (efectivo) / {totalTransferencia} (transferencia o MP).',
-    plantillaWhatsAppParticular: 'Hola {nombre}! Se agendó la clase el día {fecha} a la {hora} con el profesor/a {profesor}.'
+    plantillaWhatsAppParticular: 'Hola {nombre}! Se agendó la clase el día {fecha} a la {hora} con el profesor/a {profesor}.',
+    plantillaWhatsAppParticularDeuda: 'Hola {nombre}! Nos quedaron pendientes de pago las clases del {fechas} en {instituto}. Cualquier consulta escribinos, ¡gracias!'
   }
 };
 
@@ -3087,6 +3088,26 @@ const proximaFechaParaDia = (diaNombre) => {
   return `${String(fecha.getDate()).padStart(2, '0')}/${String(fecha.getMonth() + 1).padStart(2, '0')}`;
 };
 
+// Fecha (ISO, para guardar) de la clase de ESTA semana según el día configurado:
+// la ocurrencia de ese día más cercana a hoy, sea pasada o de hoy mismo.
+const fechaSesionActual = (diaNombre) => {
+  const idx = DIAS_SEMANA.indexOf(diaNombre);
+  if (idx === -1) return null;
+  const hoy = new Date();
+  const hoyDow = (hoy.getDay() + 6) % 7;
+  let delta = hoyDow - idx;
+  if (delta < 0) delta += 7;
+  const fecha = new Date(hoy);
+  fecha.setDate(hoy.getDate() - delta);
+  return fecha.toISOString().split('T')[0]; // YYYY-MM-DD
+};
+
+const fmtFechaCorta = (isoFecha) => {
+  if (!isoFecha) return '';
+  const [, mes, dia] = isoFecha.split('-');
+  return `${dia}/${mes}`;
+};
+
 function ParticularesTab({ data, update }) {
   const [subView, setSubView] = useState('lista'); // 'lista' | 'agenda'
   const [editing, setEditing] = useState(null);
@@ -3115,8 +3136,35 @@ function ParticularesTab({ data, update }) {
     }
   };
 
-  const togglePagado = (id) => {
-    update({ alumnosParticulares: particulares.map(p => p.id === id ? { ...p, pagado: !p.pagado } : p) });
+  // Marca la sesión de ESTA semana (según el día configurado) como pagada o no.
+  // Si no se pagó, la fecha queda guardada en fechasAdeudadas para reclamarla después.
+  const marcarSesion = (id, fecha, pagada) => {
+    update({
+      alumnosParticulares: particulares.map(p => {
+        if (p.id !== id) return p;
+        const adeudadas = (p.fechasAdeudadas || []).filter(f => f !== fecha);
+        const pagadas = (p.fechasPagadas || []).filter(f => f !== fecha);
+        return {
+          ...p,
+          fechasAdeudadas: pagada ? adeudadas : [...adeudadas, fecha],
+          fechasPagadas: pagada ? [...pagadas, fecha] : pagadas
+        };
+      })
+    });
+  };
+
+  // Salda una fecha puntual de la lista de adeudadas (cuando finalmente la paga)
+  const saldarFecha = (id, fecha) => {
+    update({
+      alumnosParticulares: particulares.map(p => {
+        if (p.id !== id) return p;
+        return {
+          ...p,
+          fechasAdeudadas: (p.fechasAdeudadas || []).filter(f => f !== fecha),
+          fechasPagadas: [...(p.fechasPagadas || []), fecha]
+        };
+      })
+    });
   };
 
   const enviarWA = (p) => {
@@ -3129,6 +3177,25 @@ function ParticularesTab({ data, update }) {
       .replace('{fecha}', fecha)
       .replace('{hora}', p.horaInicio || '')
       .replace('{profesor}', p.profesor || '')
+      .replace('{instituto}', cfg.nombreInstituto);
+    const phone = formatPhoneForWA(p.celular);
+    if (!phone) {
+      navigator.clipboard?.writeText(mensaje);
+      alert(`${p.nombre} no tiene celular cargado. Copié el mensaje al portapapeles para enviarlo manualmente:\n\n${mensaje}`);
+      return;
+    }
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(mensaje)}`, '_blank');
+  };
+
+  const reclamarDeuda = (p) => {
+    const fechas = (p.fechasAdeudadas || []).slice().sort().map(fmtFechaCorta).join(', ');
+    if (!fechas) return;
+    const cfg = data.configuracion;
+    const template = cfg.plantillaWhatsAppParticularDeuda ||
+      'Hola {nombre}! Nos quedaron pendientes de pago las clases del {fechas} en {instituto}. Cualquier consulta escribinos, ¡gracias!';
+    const mensaje = template
+      .replace('{nombre}', p.nombre)
+      .replace('{fechas}', fechas)
       .replace('{instituto}', cfg.nombreInstituto);
     const phone = formatPhoneForWA(p.celular);
     if (!phone) {
@@ -3213,50 +3280,114 @@ function ParticularesTab({ data, update }) {
             <div className="divide-y divide-stone-100">
               {filtered.map(p => {
                 const superpuesto = seSuperpone(p);
+                const sesion = p.dia ? fechaSesionActual(p.dia) : null;
+                const adeudadas = p.fechasAdeudadas || [];
+                const pagadas = p.fechasPagadas || [];
+                const sesionAdeuda = sesion && adeudadas.includes(sesion);
+                const sesionPagada = sesion && pagadas.includes(sesion);
                 return (
-                  <div key={p.id} className={`flex items-center gap-3 px-5 py-3 hover:bg-stone-50 ${!p.activo ? 'opacity-50' : ''}`}>
-                    <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${p.modalidad === 'nativo' ? 'bg-sky-100 text-sky-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                      <Clock size={16} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm flex items-center gap-2">
-                        {p.nombre}
-                        <span className={`text-xs px-1.5 py-0.5 rounded ${p.modalidad === 'nativo' ? 'bg-sky-50 text-sky-700' : 'bg-emerald-50 text-emerald-700'}`}>
-                          {p.modalidad === 'nativo' ? 'Nativo (oral)' : 'Profesor'}
-                        </span>
-                        {superpuesto && (
-                          <span className="text-xs px-1.5 py-0.5 bg-red-50 text-red-700 rounded flex items-center gap-1">
-                            <AlertCircle size={11} /> Superpuesto
+                  <div key={p.id} className={`px-5 py-3 hover:bg-stone-50 ${!p.activo ? 'opacity-50' : ''}`}>
+                    <div className="flex items-center gap-3">
+                      <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${p.modalidad === 'nativo' ? 'bg-sky-100 text-sky-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                        <Clock size={16} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm flex items-center gap-2 flex-wrap">
+                          {p.nombre}
+                          <span className={`text-xs px-1.5 py-0.5 rounded ${p.modalidad === 'nativo' ? 'bg-sky-50 text-sky-700' : 'bg-emerald-50 text-emerald-700'}`}>
+                            {p.modalidad === 'nativo' ? 'Nativo (oral)' : 'Profesor'}
                           </span>
-                        )}
-                        {!p.activo && <span className="text-xs px-1.5 py-0.5 bg-stone-200 text-stone-600 rounded">Inactivo</span>}
+                          {superpuesto && (
+                            <span className="text-xs px-1.5 py-0.5 bg-red-50 text-red-700 rounded flex items-center gap-1">
+                              <AlertCircle size={11} /> Superpuesto
+                            </span>
+                          )}
+                          {adeudadas.length > 0 && (
+                            <span className="text-xs px-1.5 py-0.5 bg-red-50 text-red-700 rounded font-semibold">
+                              Adeuda {adeudadas.length} clase{adeudadas.length !== 1 ? 's' : ''}
+                            </span>
+                          )}
+                          {!p.activo && <span className="text-xs px-1.5 py-0.5 bg-stone-200 text-stone-600 rounded">Inactivo</span>}
+                        </div>
+                        <div className="text-xs text-stone-500 truncate">
+                          {p.profesor || 'Sin asignar'} · {p.dia || 'Sin día'} {p.horaInicio || ''} · {p.duracionMin || 60} min
+                          {p.celular && <> · {p.celular}</>}
+                        </div>
                       </div>
-                      <div className="text-xs text-stone-500 truncate">
-                        {p.profesor || 'Sin asignar'} · {p.dia || 'Sin día'} {p.horaInicio || ''} · {p.duracionMin || 60} min
-                        {p.celular && <> · {p.celular}</>}
-                      </div>
+                      <button
+                        onClick={() => enviarWA(p)}
+                        className="p-2 text-stone-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg"
+                        title="Avisar clase agendada por WhatsApp"
+                      >
+                        <MessageCircle size={16} />
+                      </button>
+                      <button onClick={() => setEditing(p)} className="p-2 text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-lg">
+                        <Edit2 size={16} />
+                      </button>
+                      <button onClick={() => eliminar(p.id)} className="p-2 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
+                        <Trash2 size={16} />
+                      </button>
                     </div>
-                    <button
-                      onClick={() => togglePagado(p.id)}
-                      className={`text-xs px-2.5 py-1.5 rounded-lg font-medium whitespace-nowrap ${
-                        p.pagado ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
-                      }`}
-                    >
-                      {p.pagado ? 'Pagado ✓' : 'Pendiente'}
-                    </button>
-                    <button
-                      onClick={() => enviarWA(p)}
-                      className="p-2 text-stone-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg"
-                      title="Avisar clase agendada por WhatsApp"
-                    >
-                      <MessageCircle size={16} />
-                    </button>
-                    <button onClick={() => setEditing(p)} className="p-2 text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-lg">
-                      <Edit2 size={16} />
-                    </button>
-                    <button onClick={() => eliminar(p.id)} className="p-2 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
-                      <Trash2 size={16} />
-                    </button>
+
+                    {sesion && (
+                      <div className="mt-2 ml-12 flex items-center gap-2 flex-wrap">
+                        {sesionAdeuda ? (
+                          <>
+                            <span className="text-xs px-2 py-1 bg-red-50 text-red-700 rounded-lg">
+                              Semana del {fmtFechaCorta(sesion)}: no se pagó
+                            </span>
+                            <button
+                              onClick={() => saldarFecha(p.id, sesion)}
+                              className="text-xs px-2 py-1 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 rounded-lg font-medium"
+                            >
+                              Ya la pagó
+                            </button>
+                          </>
+                        ) : sesionPagada ? (
+                          <span className="text-xs px-2 py-1 bg-emerald-50 text-emerald-700 rounded-lg">
+                            Semana del {fmtFechaCorta(sesion)}: pagada ✓
+                          </span>
+                        ) : (
+                          <>
+                            <span className="text-xs text-stone-500">¿Se pagó la clase de esta semana ({fmtFechaCorta(sesion)})?</span>
+                            <button
+                              onClick={() => marcarSesion(p.id, sesion, true)}
+                              className="text-xs px-2 py-1 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 rounded-lg font-medium"
+                            >
+                              Sí
+                            </button>
+                            <button
+                              onClick={() => marcarSesion(p.id, sesion, false)}
+                              className="text-xs px-2 py-1 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg font-medium"
+                            >
+                              No
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    {adeudadas.length > 0 && (
+                      <div className="mt-2 ml-12 flex items-center gap-2 flex-wrap">
+                        <span className="text-xs text-stone-500">Fechas adeudadas:</span>
+                        {adeudadas.slice().sort().map(f => (
+                          <button
+                            key={f}
+                            onClick={() => saldarFecha(p.id, f)}
+                            title="Click para marcar como pagada"
+                            className="text-xs px-2 py-0.5 bg-red-50 text-red-700 hover:bg-red-100 rounded-full border border-red-200"
+                          >
+                            {fmtFechaCorta(f)} ✕
+                          </button>
+                        ))}
+                        <button
+                          onClick={() => reclamarDeuda(p)}
+                          className="text-xs px-2 py-0.5 bg-stone-700 hover:bg-stone-800 text-white rounded-full flex items-center gap-1"
+                        >
+                          <MessageCircle size={11} /> Reclamar por WhatsApp
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -3323,7 +3454,7 @@ function ParticularesTab({ data, update }) {
 
 function ParticularForm({ particular, profesoresExistentes, onSave, onClose }) {
   const [form, setForm] = useState(particular || {
-    nombre: '', celular: '', profesor: '', modalidad: 'profe', dia: 'Lunes', horaInicio: '', duracionMin: 60, activo: true, observaciones: '', pagado: false
+    nombre: '', celular: '', profesor: '', modalidad: 'profe', dia: 'Lunes', horaInicio: '', duracionMin: 60, activo: true, observaciones: '', fechasAdeudadas: [], fechasPagadas: []
   });
   const set = (k, v) => setForm({ ...form, [k]: v });
 
@@ -4059,6 +4190,19 @@ function ConfigTab({ data, update }) {
           />
           <p className="text-xs text-stone-400 mt-1">
             Variables: <code className="bg-stone-100 px-1 rounded">{'{nombre}'}</code> <code className="bg-stone-100 px-1 rounded">{'{fecha}'}</code> <code className="bg-stone-100 px-1 rounded">{'{hora}'}</code> <code className="bg-stone-100 px-1 rounded">{'{profesor}'}</code> <code className="bg-stone-100 px-1 rounded">{'{instituto}'}</code>
+          </p>
+        </div>
+
+        <div>
+          <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Plantilla "Alumnos particulares" (reclamar clases adeudadas)</label>
+          <textarea
+            value={config.plantillaWhatsAppParticularDeuda || ''}
+            onChange={e => set('plantillaWhatsAppParticularDeuda', e.target.value)}
+            rows={2}
+            className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 text-sm"
+          />
+          <p className="text-xs text-stone-400 mt-1">
+            Variables: <code className="bg-stone-100 px-1 rounded">{'{nombre}'}</code> <code className="bg-stone-100 px-1 rounded">{'{fechas}'}</code> <code className="bg-stone-100 px-1 rounded">{'{instituto}'}</code>
           </p>
         </div>
       </div>
