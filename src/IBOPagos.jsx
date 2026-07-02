@@ -106,7 +106,8 @@ const initialState = {
     plantillaWhatsApp: 'Hola {nombre}! Confirmamos el pago de {periodos} en {instituto} por {total} ({medio}). ¡Muchas gracias!',
     plantillaWhatsAppParcial: 'Hola {nombre}! Recibimos un pago parcial de {monto} ({medio}) para la cuota de {periodo} en {instituto}. Saldo pendiente: {saldo}. ¡Gracias!',
     plantillaWhatsAppSaldo: 'Hola {nombre}! Confirmamos el pago del saldo pendiente de {periodo} ({monto} en {medio}) en {instituto}. ¡Cuota saldada!',
-    plantillaWhatsAppCotizacion: 'Hola {nombre}! El importe de {periodos} en {instituto} es:\n{detalle}\nTotal: {total} (efectivo) / {totalTransferencia} (transferencia o MP).'
+    plantillaWhatsAppCotizacion: 'Hola {nombre}! El importe de {periodos} en {instituto} es:\n{detalle}\nTotal: {total} (efectivo) / {totalTransferencia} (transferencia o MP).',
+    plantillaWhatsAppParticular: 'Hola {nombre}! Se agendó la clase el día {fecha} a la {hora} con el profesor/a {profesor}.'
   }
 };
 
@@ -3065,6 +3066,27 @@ const horaAMinutos = (hhmm) => {
   return h * 60 + m;
 };
 
+// Horarios disponibles cada 15 minutos, de 08:00 a 21:45
+const HORARIOS_15MIN = Array.from({ length: (22 - 8) * 4 }, (_, i) => {
+  const totalMin = 8 * 60 + i * 15;
+  const h = String(Math.floor(totalMin / 60)).padStart(2, '0');
+  const m = String(totalMin % 60).padStart(2, '0');
+  return `${h}:${m}`;
+});
+
+// Próxima fecha (incluyendo hoy) en que cae un día de la semana dado, formateada DD/MM
+const proximaFechaParaDia = (diaNombre) => {
+  const idx = DIAS_SEMANA.indexOf(diaNombre); // 0=Lunes ... 5=Sábado
+  if (idx === -1) return '';
+  const hoy = new Date();
+  const hoyDow = (hoy.getDay() + 6) % 7; // 0=Lunes ... 6=Domingo
+  let delta = idx - hoyDow;
+  if (delta < 0) delta += 7;
+  const fecha = new Date(hoy);
+  fecha.setDate(hoy.getDate() + delta);
+  return `${String(fecha.getDate()).padStart(2, '0')}/${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+};
+
 function ParticularesTab({ data, update }) {
   const [subView, setSubView] = useState('lista'); // 'lista' | 'agenda'
   const [editing, setEditing] = useState(null);
@@ -3091,6 +3113,30 @@ function ParticularesTab({ data, update }) {
     if (confirm('¿Eliminar este alumno particular?')) {
       update({ alumnosParticulares: particulares.filter(p => p.id !== id) });
     }
+  };
+
+  const togglePagado = (id) => {
+    update({ alumnosParticulares: particulares.map(p => p.id === id ? { ...p, pagado: !p.pagado } : p) });
+  };
+
+  const enviarWA = (p) => {
+    const fecha = proximaFechaParaDia(p.dia);
+    const cfg = data.configuracion;
+    const template = cfg.plantillaWhatsAppParticular ||
+      'Hola {nombre}! Se agendó la clase el día {fecha} a la {hora} con el profesor/a {profesor}.';
+    const mensaje = template
+      .replace('{nombre}', p.nombre)
+      .replace('{fecha}', fecha)
+      .replace('{hora}', p.horaInicio || '')
+      .replace('{profesor}', p.profesor || '')
+      .replace('{instituto}', cfg.nombreInstituto);
+    const phone = formatPhoneForWA(p.celular);
+    if (!phone) {
+      navigator.clipboard?.writeText(mensaje);
+      alert(`${p.nombre} no tiene celular cargado. Copié el mensaje al portapapeles para enviarlo manualmente:\n\n${mensaje}`);
+      return;
+    }
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(mensaje)}`, '_blank');
   };
 
   // Detecta superposición de horario: mismo profesor, mismo día, rangos que se cruzan
@@ -3190,6 +3236,21 @@ function ParticularesTab({ data, update }) {
                         {p.celular && <> · {p.celular}</>}
                       </div>
                     </div>
+                    <button
+                      onClick={() => togglePagado(p.id)}
+                      className={`text-xs px-2.5 py-1.5 rounded-lg font-medium whitespace-nowrap ${
+                        p.pagado ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                      }`}
+                    >
+                      {p.pagado ? 'Pagado ✓' : 'Pendiente'}
+                    </button>
+                    <button
+                      onClick={() => enviarWA(p)}
+                      className="p-2 text-stone-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg"
+                      title="Avisar clase agendada por WhatsApp"
+                    >
+                      <MessageCircle size={16} />
+                    </button>
                     <button onClick={() => setEditing(p)} className="p-2 text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-lg">
                       <Edit2 size={16} />
                     </button>
@@ -3251,6 +3312,7 @@ function ParticularesTab({ data, update }) {
       {editing && (
         <ParticularForm
           particular={editing === 'new' ? null : editing}
+          profesoresExistentes={profesores}
           onSave={guardar}
           onClose={() => setEditing(null)}
         />
@@ -3259,9 +3321,9 @@ function ParticularesTab({ data, update }) {
   );
 }
 
-function ParticularForm({ particular, onSave, onClose }) {
+function ParticularForm({ particular, profesoresExistentes, onSave, onClose }) {
   const [form, setForm] = useState(particular || {
-    nombre: '', celular: '', profesor: '', modalidad: 'profe', dia: 'Lunes', horaInicio: '', duracionMin: 60, activo: true, observaciones: ''
+    nombre: '', celular: '', profesor: '', modalidad: 'profe', dia: 'Lunes', horaInicio: '', duracionMin: 60, activo: true, observaciones: '', pagado: false
   });
   const set = (k, v) => setForm({ ...form, [k]: v });
 
@@ -3293,7 +3355,20 @@ function ParticularForm({ particular, onSave, onClose }) {
             </div>
           </div>
 
-          <Field label="Profesor" value={form.profesor} onChange={v => set('profesor', v)} hint="Nombre del profe o del nativo a cargo" />
+          <div>
+            <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Profesor</label>
+            <input
+              type="text"
+              list="profesores-existentes"
+              value={form.profesor}
+              onChange={e => set('profesor', e.target.value)}
+              className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+            />
+            <datalist id="profesores-existentes">
+              {(profesoresExistentes || []).map(p => <option key={p} value={p} />)}
+            </datalist>
+            <p className="text-xs text-stone-400 mt-1">Nombre del profe o del nativo a cargo. Empezá a escribir para elegir uno ya cargado.</p>
+          </div>
 
           <div className="grid grid-cols-3 gap-3">
             <div>
@@ -3306,7 +3381,17 @@ function ParticularForm({ particular, onSave, onClose }) {
                 {DIAS_SEMANA.map(d => <option key={d} value={d}>{d}</option>)}
               </select>
             </div>
-            <Field label="Hora" type="time" value={form.horaInicio} onChange={v => set('horaInicio', v)} />
+            <div>
+              <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Hora</label>
+              <select
+                value={form.horaInicio}
+                onChange={e => set('horaInicio', e.target.value)}
+                className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 bg-white text-sm"
+              >
+                <option value="">— Elegir —</option>
+                {HORARIOS_15MIN.map(h => <option key={h} value={h}>{h}</option>)}
+              </select>
+            </div>
             <div>
               <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Duración</label>
               <select
@@ -3961,6 +4046,19 @@ function ConfigTab({ data, update }) {
           />
           <p className="text-xs text-stone-400 mt-1">
             Variables: <code className="bg-stone-100 px-1 rounded">{'{nombre}'}</code> <code className="bg-stone-100 px-1 rounded">{'{periodos}'}</code> <code className="bg-stone-100 px-1 rounded">{'{instituto}'}</code> <code className="bg-stone-100 px-1 rounded">{'{detalle}'}</code> <code className="bg-stone-100 px-1 rounded">{'{total}'}</code> <code className="bg-stone-100 px-1 rounded">{'{totalTransferencia}'}</code>
+          </p>
+        </div>
+
+        <div>
+          <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Plantilla "Alumnos particulares" (avisar clase agendada)</label>
+          <textarea
+            value={config.plantillaWhatsAppParticular || ''}
+            onChange={e => set('plantillaWhatsAppParticular', e.target.value)}
+            rows={2}
+            className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 text-sm"
+          />
+          <p className="text-xs text-stone-400 mt-1">
+            Variables: <code className="bg-stone-100 px-1 rounded">{'{nombre}'}</code> <code className="bg-stone-100 px-1 rounded">{'{fecha}'}</code> <code className="bg-stone-100 px-1 rounded">{'{hora}'}</code> <code className="bg-stone-100 px-1 rounded">{'{profesor}'}</code> <code className="bg-stone-100 px-1 rounded">{'{instituto}'}</code>
           </p>
         </div>
       </div>
