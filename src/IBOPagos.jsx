@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Search, Plus, X, Edit2, Trash2, Users, BookOpen, Settings, CreditCard,
   Check, MessageCircle, ChevronRight, Download, Upload, AlertCircle,
-  Calendar, DollarSign, UserPlus, History, Tag, Home, Ban, Calculator
+  Calendar, DollarSign, UserPlus, History, Tag, Home, Ban, Calculator, Clock
 } from 'lucide-react';
 
 // ============================================================
@@ -90,6 +90,7 @@ const initialState = {
   gruposFamiliares: [],
   promociones: [],
   pagos: [],
+  alumnosParticulares: [],
   configuracion: {
     nombreInstituto: 'IBO',
     recargoSegundaQuincenaPorcentaje: 5,
@@ -447,6 +448,7 @@ export default function App() {
           <div className="mt-6">
             {tab === 'pagos' && <PagosTab data={data} update={update} />}
             {tab === 'alumnos' && <AlumnosTab data={data} update={update} />}
+            {tab === 'particulares' && <ParticularesTab data={data} update={update} />}
             {tab === 'cursos' && <CursosTab data={data} update={update} />}
             {tab === 'config' && <ConfigTab data={data} update={update} />}
           </div>
@@ -475,6 +477,7 @@ function Header({ tab, setTab, nombreInstituto, saveStatus }) {
   const tabs = [
     { id: 'pagos', label: 'Pagos', icon: CreditCard },
     { id: 'alumnos', label: 'Alumnos', icon: Users },
+    { id: 'particulares', label: 'Particulares', icon: Clock },
     { id: 'cursos', label: 'Cursos', icon: BookOpen },
     { id: 'config', label: 'Configuración', icon: Settings }
   ];
@@ -3048,6 +3051,298 @@ function FilterChip({ active, onClick, children }) {
     >
       {children}
     </button>
+  );
+}
+
+// ============================================================
+// PARTICULARES TAB (alumnos particulares: clases con profe o nativo)
+// ============================================================
+const DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+
+// Convierte "HH:MM" a minutos desde medianoche, para comparar horarios
+const horaAMinutos = (hhmm) => {
+  const [h, m] = (hhmm || '0:0').split(':').map(Number);
+  return h * 60 + m;
+};
+
+function ParticularesTab({ data, update }) {
+  const [subView, setSubView] = useState('lista'); // 'lista' | 'agenda'
+  const [editing, setEditing] = useState(null);
+  const [query, setQuery] = useState('');
+  const particulares = data.alumnosParticulares || [];
+
+  const filtered = useMemo(() => {
+    const q = query.toLowerCase();
+    return particulares.filter(p =>
+      !q || (p.nombre + ' ' + p.profesor).toLowerCase().includes(q)
+    );
+  }, [particulares, query]);
+
+  const guardar = (p) => {
+    if (p.id) {
+      update({ alumnosParticulares: particulares.map(x => x.id === p.id ? p : x) });
+    } else {
+      update({ alumnosParticulares: [...particulares, { ...p, id: uid() }] });
+    }
+    setEditing(null);
+  };
+
+  const eliminar = (id) => {
+    if (confirm('¿Eliminar este alumno particular?')) {
+      update({ alumnosParticulares: particulares.filter(p => p.id !== id) });
+    }
+  };
+
+  // Detecta superposición de horario: mismo profesor, mismo día, rangos que se cruzan
+  const seSuperpone = (p) => {
+    if (!p.dia || !p.horaInicio) return false;
+    const inicio = horaAMinutos(p.horaInicio);
+    const fin = inicio + (Number(p.duracionMin) || 60);
+    return particulares.some(o => {
+      if (o.id === p.id || o.profesor !== p.profesor || o.dia !== p.dia) return false;
+      const oInicio = horaAMinutos(o.horaInicio);
+      const oFin = oInicio + (Number(o.duracionMin) || 60);
+      return inicio < oFin && oInicio < fin;
+    });
+  };
+
+  const profesores = useMemo(() =>
+    [...new Set(particulares.map(p => p.profesor).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+    [particulares]
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white rounded-2xl border border-stone-200 p-6 space-y-4">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <h2 className="font-semibold">Alumnos particulares</h2>
+            <p className="text-sm text-stone-500 mt-0.5">Clases individuales con profe o con nativo (orales)</p>
+          </div>
+          <div className="flex gap-1 border border-stone-200 rounded-lg p-1">
+            <button
+              onClick={() => setSubView('lista')}
+              className={`px-3 py-1.5 text-sm font-medium rounded-md ${subView === 'lista' ? 'bg-emerald-700 text-white' : 'text-stone-600 hover:bg-stone-100'}`}
+            >
+              Lista
+            </button>
+            <button
+              onClick={() => setSubView('agenda')}
+              className={`px-3 py-1.5 text-sm font-medium rounded-md ${subView === 'agenda' ? 'bg-emerald-700 text-white' : 'text-stone-600 hover:bg-stone-100'}`}
+            >
+              Agenda por profe
+            </button>
+          </div>
+        </div>
+
+        {subView === 'lista' && (
+          <div className="flex items-center gap-3">
+            <div className="relative flex-1">
+              <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400" />
+              <input
+                type="text"
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                placeholder="Buscar por alumno o profesor..."
+                className="w-full pl-11 pr-4 py-3 rounded-xl border border-stone-200 bg-white"
+              />
+            </div>
+            <button
+              onClick={() => setEditing('new')}
+              className="bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-3 rounded-xl font-medium flex items-center gap-2 whitespace-nowrap"
+            >
+              <Plus size={18} /> Nuevo particular
+            </button>
+          </div>
+        )}
+      </div>
+
+      {subView === 'lista' && (
+        <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden">
+          {filtered.length === 0 ? (
+            <div className="p-12 text-center text-stone-400 text-sm">
+              {particulares.length === 0 ? 'No hay alumnos particulares cargados todavía' : 'Sin resultados'}
+            </div>
+          ) : (
+            <div className="divide-y divide-stone-100">
+              {filtered.map(p => {
+                const superpuesto = seSuperpone(p);
+                return (
+                  <div key={p.id} className={`flex items-center gap-3 px-5 py-3 hover:bg-stone-50 ${!p.activo ? 'opacity-50' : ''}`}>
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${p.modalidad === 'nativo' ? 'bg-sky-100 text-sky-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                      <Clock size={16} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm flex items-center gap-2">
+                        {p.nombre}
+                        <span className={`text-xs px-1.5 py-0.5 rounded ${p.modalidad === 'nativo' ? 'bg-sky-50 text-sky-700' : 'bg-emerald-50 text-emerald-700'}`}>
+                          {p.modalidad === 'nativo' ? 'Nativo (oral)' : 'Profesor'}
+                        </span>
+                        {superpuesto && (
+                          <span className="text-xs px-1.5 py-0.5 bg-red-50 text-red-700 rounded flex items-center gap-1">
+                            <AlertCircle size={11} /> Superpuesto
+                          </span>
+                        )}
+                        {!p.activo && <span className="text-xs px-1.5 py-0.5 bg-stone-200 text-stone-600 rounded">Inactivo</span>}
+                      </div>
+                      <div className="text-xs text-stone-500 truncate">
+                        {p.profesor || 'Sin asignar'} · {p.dia || 'Sin día'} {p.horaInicio || ''} · {p.duracionMin || 60} min
+                        {p.celular && <> · {p.celular}</>}
+                      </div>
+                    </div>
+                    <button onClick={() => setEditing(p)} className="p-2 text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-lg">
+                      <Edit2 size={16} />
+                    </button>
+                    <button onClick={() => eliminar(p.id)} className="p-2 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {subView === 'agenda' && (
+        profesores.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-stone-200 p-12 text-center text-stone-400 text-sm">
+            Cargá algún alumno particular con profesor asignado para ver la agenda
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {profesores.map(profesor => {
+              const deEsteProfesor = particulares.filter(p => p.profesor === profesor && p.activo);
+              return (
+                <div key={profesor} className="bg-white rounded-2xl border border-stone-200 overflow-hidden">
+                  <div className="px-6 py-4 border-b border-stone-100 bg-stone-50/60 flex items-center gap-2">
+                    <Clock size={16} className="text-stone-400" />
+                    <span className="font-semibold text-stone-900">{profesor}</span>
+                    <span className="text-xs text-stone-500 bg-stone-200 px-2 py-0.5 rounded-full">{deEsteProfesor.length} clases/semana</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-5">
+                    {DIAS_SEMANA.map(dia => {
+                      const slots = deEsteProfesor
+                        .filter(p => p.dia === dia)
+                        .sort((a, b) => horaAMinutos(a.horaInicio) - horaAMinutos(b.horaInicio));
+                      if (slots.length === 0) return null;
+                      return (
+                        <div key={dia} className="border border-stone-200 rounded-xl p-3">
+                          <div className="text-xs uppercase tracking-wider text-stone-500 font-medium mb-2">{dia}</div>
+                          <div className="space-y-1.5">
+                            {slots.map(s => (
+                              <div key={s.id} className={`text-sm px-2.5 py-1.5 rounded-lg ${seSuperpone(s) ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-stone-50 text-stone-700'}`}>
+                                <span className="font-medium">{s.horaInicio}</span> · {s.nombre}
+                                <span className="text-xs text-stone-400"> ({s.duracionMin || 60}min{s.modalidad === 'nativo' ? ' · nativo' : ''})</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )
+      )}
+
+      {editing && (
+        <ParticularForm
+          particular={editing === 'new' ? null : editing}
+          onSave={guardar}
+          onClose={() => setEditing(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function ParticularForm({ particular, onSave, onClose }) {
+  const [form, setForm] = useState(particular || {
+    nombre: '', celular: '', profesor: '', modalidad: 'profe', dia: 'Lunes', horaInicio: '', duracionMin: 60, activo: true, observaciones: ''
+  });
+  const set = (k, v) => setForm({ ...form, [k]: v });
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-white rounded-2xl max-w-md w-full my-8 max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white border-b border-stone-200 px-6 py-4 flex items-center justify-between">
+          <h2 className="font-semibold text-lg">{particular ? 'Editar particular' : 'Nuevo alumno particular'}</h2>
+          <button onClick={onClose} className="text-stone-400 hover:text-stone-700"><X size={20} /></button>
+        </div>
+        <div className="p-6 space-y-4">
+          <Field label="Nombre" value={form.nombre} onChange={v => set('nombre', v)} />
+          <Field label="Celular (opcional)" value={form.celular} onChange={v => set('celular', v)} hint="Sin 0 ni 15" />
+
+          <div>
+            <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Modalidad</label>
+            <div className="flex gap-2 mt-1">
+              {[{ id: 'profe', label: 'Con profesor' }, { id: 'nativo', label: 'Nativo (oral)' }].map(m => (
+                <button
+                  key={m.id}
+                  onClick={() => set('modalidad', m.id)}
+                  className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border ${
+                    form.modalidad === m.id ? 'bg-emerald-700 text-white border-emerald-700' : 'border-stone-200 text-stone-600 hover:bg-stone-50'
+                  }`}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <Field label="Profesor" value={form.profesor} onChange={v => set('profesor', v)} hint="Nombre del profe o del nativo a cargo" />
+
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Día</label>
+              <select
+                value={form.dia}
+                onChange={e => set('dia', e.target.value)}
+                className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 bg-white text-sm"
+              >
+                {DIAS_SEMANA.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </div>
+            <Field label="Hora" type="time" value={form.horaInicio} onChange={v => set('horaInicio', v)} />
+            <div>
+              <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Duración</label>
+              <select
+                value={form.duracionMin}
+                onChange={e => set('duracionMin', Number(e.target.value))}
+                className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 bg-white text-sm"
+              >
+                <option value={30}>30 min</option>
+                <option value={60}>60 min</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Observaciones</label>
+            <textarea
+              value={form.observaciones}
+              onChange={e => set('observaciones', e.target.value)}
+              rows={2}
+              className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 bg-white text-sm"
+            />
+          </div>
+
+          <div className="flex gap-2 pt-4 border-t border-stone-200">
+            <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-lg border border-stone-200 hover:bg-stone-50 font-medium text-sm">Cancelar</button>
+            <button
+              onClick={() => onSave(form)}
+              disabled={!form.nombre || !form.profesor || !form.horaInicio}
+              className="flex-1 px-4 py-2.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-medium text-sm disabled:opacity-50"
+            >
+              Guardar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
