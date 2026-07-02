@@ -3112,6 +3112,7 @@ function ParticularesTab({ data, update }) {
   const [subView, setSubView] = useState('lista'); // 'lista' | 'agenda'
   const [editing, setEditing] = useState(null);
   const [query, setQuery] = useState('');
+  const [historialAbierto, setHistorialAbierto] = useState(null); // id del particular con el historial expandido
   const particulares = data.alumnosParticulares || [];
 
   const filtered = useMemo(() => {
@@ -3164,6 +3165,28 @@ function ParticularesTab({ data, update }) {
           fechasPagadas: [...(p.fechasPagadas || []), fecha]
         };
       })
+    });
+  };
+
+  // Registra que el alumno vino hoy (o quita el registro si se tocó por error)
+  const toggleAsistenciaHoy = (id) => {
+    const hoy = today();
+    update({
+      alumnosParticulares: particulares.map(p => {
+        if (p.id !== id) return p;
+        const asistencias = p.asistencias || [];
+        const yaAsistio = asistencias.includes(hoy);
+        return { ...p, asistencias: yaAsistio ? asistencias.filter(f => f !== hoy) : [...asistencias, hoy] };
+      })
+    });
+  };
+
+  // Quita una fecha puntual del historial de asistencia (por si se cargó mal)
+  const quitarAsistencia = (id, fecha) => {
+    update({
+      alumnosParticulares: particulares.map(p =>
+        p.id === id ? { ...p, asistencias: (p.asistencias || []).filter(f => f !== fecha) } : p
+      )
     });
   };
 
@@ -3388,6 +3411,45 @@ function ParticularesTab({ data, update }) {
                         </button>
                       </div>
                     )}
+
+                    <div className="mt-2 ml-12 flex items-center gap-2 flex-wrap">
+                      <button
+                        onClick={() => toggleAsistenciaHoy(p.id)}
+                        className={`text-xs px-2 py-1 rounded-lg font-medium flex items-center gap-1 ${
+                          (p.asistencias || []).includes(today())
+                            ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                            : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                        }`}
+                      >
+                        <Check size={12} /> {(p.asistencias || []).includes(today()) ? 'Vino hoy ✓' : 'Marcar que vino hoy'}
+                      </button>
+                      {(p.asistencias || []).length > 0 && (
+                        <button
+                          onClick={() => setHistorialAbierto(historialAbierto === p.id ? null : p.id)}
+                          className="text-xs px-2 py-1 text-stone-500 hover:text-stone-800 hover:bg-stone-100 rounded-lg flex items-center gap-1"
+                        >
+                          <History size={12} /> Historial ({(p.asistencias || []).length}) {historialAbierto === p.id ? '▲' : '▼'}
+                        </button>
+                      )}
+                    </div>
+                    {historialAbierto === p.id && (
+                      <div className="mt-2 ml-12 flex items-center gap-2 flex-wrap">
+                        {(p.asistencias || []).length === 0 ? (
+                          <span className="text-xs text-stone-400">Sin asistencias registradas todavía</span>
+                        ) : (
+                          [...(p.asistencias || [])].sort().reverse().map(f => (
+                            <button
+                              key={f}
+                              onClick={() => quitarAsistencia(p.id, f)}
+                              title="Click para quitar (si se cargó por error)"
+                              className="text-xs px-2 py-0.5 bg-stone-50 text-stone-600 hover:bg-stone-100 rounded-full border border-stone-200"
+                            >
+                              {fmtFechaCorta(f)} ✕
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -3454,7 +3516,7 @@ function ParticularesTab({ data, update }) {
 
 function ParticularForm({ particular, profesoresExistentes, onSave, onClose }) {
   const [form, setForm] = useState(particular || {
-    nombre: '', celular: '', profesor: '', modalidad: 'profe', dia: 'Lunes', horaInicio: '', duracionMin: 60, activo: true, observaciones: '', fechasAdeudadas: [], fechasPagadas: []
+    nombre: '', celular: '', profesor: '', modalidad: 'profe', dia: 'Lunes', horaInicio: '', duracionMin: 60, activo: true, observaciones: '', fechasAdeudadas: [], fechasPagadas: [], asistencias: []
   });
   const set = (k, v) => setForm({ ...form, [k]: v });
 
