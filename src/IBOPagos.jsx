@@ -116,6 +116,17 @@ const fmtMoney = (n) => '$' + Math.round(n).toLocaleString('es-AR');
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 const today = () => new Date().toISOString().split('T')[0];
 
+// Redondea un monto final de cuota a múltiplos de $500, mirando los
+// últimos 3 dígitos: 0-250 baja a x000, 251-749 va a x500, 750-999
+// sube a x000 del millar siguiente.
+const redondearMonto = (monto) => {
+  const miles = Math.floor(monto / 1000) * 1000;
+  const resto = monto - miles;
+  if (resto <= 250) return miles;
+  if (resto < 750) return miles + 500;
+  return miles + 1000;
+};
+
 const initials = (alumno) => {
   const a = (alumno.apellido || '').trim()[0] || '';
   const n = (alumno.nombre || '').trim()[0] || '';
@@ -282,6 +293,11 @@ const calcularCuota = (alumno, periodoId, anio, ctx) => {
     if (efectivoFinal) efectivoFinal = Math.max(0, efectivoFinal - promo.montoDescuento);
     transferenciaFinal = Math.max(0, transferenciaFinal - promo.montoDescuento);
   }
+
+  // Redondeo final a múltiplos de $500, para no tener que cobrar montos
+  // "raros" que salen de aplicar porcentajes.
+  if (efectivoFinal) efectivoFinal = redondearMonto(efectivoFinal);
+  transferenciaFinal = redondearMonto(transferenciaFinal);
 
   return {
     efectivo: efectivoFinal,
