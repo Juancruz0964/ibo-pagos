@@ -3112,8 +3112,9 @@ function ParticularesTab({ data, update }) {
   const [subView, setSubView] = useState('lista'); // 'lista' | 'agenda'
   const [editing, setEditing] = useState(null);
   const [query, setQuery] = useState('');
-  const [historialAbierto, setHistorialAbierto] = useState(null); // id del particular con el historial expandido
+  const [viendoPerfilId, setViendoPerfilId] = useState(null); // id del particular con el perfil abierto
   const particulares = data.alumnosParticulares || [];
+  const viendoPerfil = particulares.find(p => p.id === viendoPerfilId) || null;
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
@@ -3294,158 +3295,54 @@ function ParticularesTab({ data, update }) {
               {filtered.map(p => {
                 const superpuesto = seSuperpone(p);
                 const historial = p.historial || [];
-                const sesion = p.dia ? fechaSesionActual(p.dia) : null;
-                const entradaSesion = sesion ? historial.find(h => h.fecha === sesion) : null;
                 const adeudadas = historial.filter(h => !h.pagada && h.estado !== 'cancelado_aviso');
                 return (
-                  <div key={p.id} className={`px-5 py-3 hover:bg-stone-50 ${!p.activo ? 'opacity-50' : ''}`}>
-                    <div className="flex items-center gap-3">
-                      <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${p.modalidad === 'nativo' ? 'bg-sky-100 text-sky-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                        <Clock size={16} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm flex items-center gap-2 flex-wrap">
-                          {p.nombre}
-                          <span className={`text-xs px-1.5 py-0.5 rounded ${p.modalidad === 'nativo' ? 'bg-sky-50 text-sky-700' : 'bg-emerald-50 text-emerald-700'}`}>
-                            {p.modalidad === 'nativo' ? 'Nativo (oral)' : 'Profesor'}
-                          </span>
-                          {superpuesto && (
-                            <span className="text-xs px-1.5 py-0.5 bg-red-50 text-red-700 rounded flex items-center gap-1">
-                              <AlertCircle size={11} /> Superpuesto
-                            </span>
-                          )}
-                          {adeudadas.length > 0 && (
-                            <span className="text-xs px-1.5 py-0.5 bg-red-50 text-red-700 rounded font-semibold">
-                              Adeuda {adeudadas.length} clase{adeudadas.length !== 1 ? 's' : ''}
-                            </span>
-                          )}
-                          {!p.activo && <span className="text-xs px-1.5 py-0.5 bg-stone-200 text-stone-600 rounded">Inactivo</span>}
-                        </div>
-                        <div className="text-xs text-stone-500 truncate">
-                          {p.profesor || 'Sin asignar'} · {p.dia || 'Sin día'} {p.horaInicio || ''} · {p.duracionMin || 60} min
-                          {p.celular && <> · {p.celular}</>}
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => enviarWA(p)}
-                        className="p-2 text-stone-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg"
-                        title="Avisar clase agendada por WhatsApp"
-                      >
-                        <MessageCircle size={16} />
-                      </button>
-                      <button onClick={() => setEditing(p)} className="p-2 text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-lg">
-                        <Edit2 size={16} />
-                      </button>
-                      <button onClick={() => eliminar(p.id)} className="p-2 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
-                        <Trash2 size={16} />
-                      </button>
+                  <div key={p.id} className={`flex items-center gap-3 px-5 py-3 hover:bg-stone-50 ${!p.activo ? 'opacity-50' : ''}`}>
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${p.modalidad === 'nativo' ? 'bg-sky-100 text-sky-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                      <Clock size={16} />
                     </div>
-
-                    {sesion && (
-                      <div className="mt-2 ml-12 flex items-center gap-2 flex-wrap">
-                        {!entradaSesion ? (
-                          <>
-                            <span className="text-xs text-stone-500">¿Qué pasó con la clase de esta semana ({fmtFechaCorta(sesion)})?</span>
-                            <button
-                              onClick={() => registrarSesion(p.id, sesion, 'asistio')}
-                              className="text-xs px-2 py-1 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 rounded-lg font-medium"
-                            >
-                              Asistió
-                            </button>
-                            <button
-                              onClick={() => registrarSesion(p.id, sesion, 'cancelado_aviso')}
-                              className="text-xs px-2 py-1 bg-stone-200 text-stone-700 hover:bg-stone-300 rounded-lg font-medium"
-                            >
-                              Canceló con aviso
-                            </button>
-                            <button
-                              onClick={() => registrarSesion(p.id, sesion, 'no_show')}
-                              className="text-xs px-2 py-1 bg-amber-100 text-amber-700 hover:bg-amber-200 rounded-lg font-medium"
-                            >
-                              Faltó sin avisar
-                            </button>
-                          </>
-                        ) : entradaSesion.estado === 'cancelado_aviso' ? (
-                          <span className="text-xs px-2 py-1 bg-stone-100 text-stone-600 rounded-lg">
-                            Semana del {fmtFechaCorta(sesion)}: canceló con aviso (no se cobra)
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm flex items-center gap-2 flex-wrap">
+                        {p.nombre}
+                        <span className={`text-xs px-1.5 py-0.5 rounded ${p.modalidad === 'nativo' ? 'bg-sky-50 text-sky-700' : 'bg-emerald-50 text-emerald-700'}`}>
+                          {p.modalidad === 'nativo' ? 'Nativo (oral)' : 'Profesor'}
+                        </span>
+                        {superpuesto && (
+                          <span className="text-xs px-1.5 py-0.5 bg-red-50 text-red-700 rounded flex items-center gap-1">
+                            <AlertCircle size={11} /> Superpuesto
                           </span>
-                        ) : entradaSesion.pagada ? (
-                          <span className="text-xs px-2 py-1 bg-emerald-50 text-emerald-700 rounded-lg">
-                            Semana del {fmtFechaCorta(sesion)}: {ESTADOS_SESION[entradaSesion.estado].label.toLowerCase()} · pagada ✓
+                        )}
+                        {adeudadas.length > 0 && (
+                          <span className="text-xs px-1.5 py-0.5 bg-red-50 text-red-700 rounded font-semibold">
+                            Adeuda {adeudadas.length} clase{adeudadas.length !== 1 ? 's' : ''}
                           </span>
-                        ) : (
-                          <>
-                            <span className="text-xs px-2 py-1 bg-amber-50 text-amber-700 rounded-lg">
-                              Semana del {fmtFechaCorta(sesion)}: {ESTADOS_SESION[entradaSesion.estado].label.toLowerCase()} · pendiente de pago
-                            </span>
-                            <button
-                              onClick={() => marcarPagadaHistorial(p.id, sesion, true)}
-                              className="text-xs px-2 py-1 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 rounded-lg font-medium"
-                            >
-                              Ya la pagó
-                            </button>
-                          </>
                         )}
+                        {!p.activo && <span className="text-xs px-1.5 py-0.5 bg-stone-200 text-stone-600 rounded">Inactivo</span>}
                       </div>
-                    )}
-
-                    {adeudadas.length > 0 && (
-                      <div className="mt-2 ml-12 flex items-center gap-2 flex-wrap">
-                        <span className="text-xs text-stone-500">Clases adeudadas:</span>
-                        {adeudadas.slice().sort((a, b) => a.fecha.localeCompare(b.fecha)).map(h => (
-                          <button
-                            key={h.fecha}
-                            onClick={() => marcarPagadaHistorial(p.id, h.fecha, true)}
-                            title={`${ESTADOS_SESION[h.estado].label} — click para marcar como pagada`}
-                            className="text-xs px-2 py-0.5 bg-red-50 text-red-700 hover:bg-red-100 rounded-full border border-red-200"
-                          >
-                            {fmtFechaCorta(h.fecha)} ✕
-                          </button>
-                        ))}
-                        <button
-                          onClick={() => reclamarDeuda(p)}
-                          className="text-xs px-2 py-0.5 bg-stone-700 hover:bg-stone-800 text-white rounded-full flex items-center gap-1"
-                        >
-                          <MessageCircle size={11} /> Reclamar por WhatsApp
-                        </button>
+                      <div className="text-xs text-stone-500 truncate">
+                        {p.profesor || 'Sin asignar'} · {p.dia || 'Sin día'} {p.horaInicio || ''} · {p.duracionMin || 60} min
+                        {p.celular && <> · {p.celular}</>}
                       </div>
-                    )}
-
-                    {historial.length > 0 && (
-                      <div className="mt-2 ml-12">
-                        <button
-                          onClick={() => setHistorialAbierto(historialAbierto === p.id ? null : p.id)}
-                          className="text-xs px-2 py-1 text-stone-500 hover:text-stone-800 hover:bg-stone-100 rounded-lg flex items-center gap-1"
-                        >
-                          <History size={12} /> Ver historial completo ({historial.length}) {historialAbierto === p.id ? '▲' : '▼'}
-                        </button>
-                        {historialAbierto === p.id && (
-                          <div className="mt-2 flex flex-col gap-1.5">
-                            {[...historial].sort((a, b) => b.fecha.localeCompare(a.fecha)).map(h => {
-                              const info = ESTADOS_SESION[h.estado];
-                              return (
-                                <div key={h.fecha} className="flex items-center gap-2 text-xs">
-                                  <span className="font-medium text-stone-700 w-10">{fmtFechaCorta(h.fecha)}</span>
-                                  <span className={`px-1.5 py-0.5 rounded ${info.badgeClass}`}>{info.label}</span>
-                                  {h.estado !== 'cancelado_aviso' && (
-                                    <span className={h.pagada ? 'text-emerald-600' : 'text-red-600'}>
-                                      {h.pagada ? 'Pagada ✓' : 'Pendiente de pago'}
-                                    </span>
-                                  )}
-                                  <button
-                                    onClick={() => quitarHistorial(p.id, h.fecha)}
-                                    title="Quitar este registro (si se cargó por error)"
-                                    className="text-stone-300 hover:text-red-500"
-                                  >
-                                    <Trash2 size={12} />
-                                  </button>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    )}
+                    </div>
+                    <button
+                      onClick={() => setViendoPerfilId(p.id)}
+                      className="text-sm text-emerald-700 hover:bg-emerald-50 px-3 py-1.5 rounded-lg flex items-center gap-1.5 whitespace-nowrap"
+                    >
+                      <History size={14} /> Ver perfil
+                    </button>
+                    <button
+                      onClick={() => enviarWA(p)}
+                      className="p-2 text-stone-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg"
+                      title="Avisar clase agendada por WhatsApp"
+                    >
+                      <MessageCircle size={16} />
+                    </button>
+                    <button onClick={() => setEditing(p)} className="p-2 text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-lg">
+                      <Edit2 size={16} />
+                    </button>
+                    <button onClick={() => eliminar(p.id)} className="p-2 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
+                      <Trash2 size={16} />
+                    </button>
                   </div>
                 );
               })}
@@ -3506,6 +3403,167 @@ function ParticularesTab({ data, update }) {
           onClose={() => setEditing(null)}
         />
       )}
+
+      {viendoPerfil && (
+        <ParticularPerfilModal
+          particular={viendoPerfil}
+          estadosSesion={ESTADOS_SESION}
+          onRegistrar={(fecha, estado) => registrarSesion(viendoPerfil.id, fecha, estado)}
+          onMarcarPagada={(fecha, pagada) => marcarPagadaHistorial(viendoPerfil.id, fecha, pagada)}
+          onQuitar={(fecha) => quitarHistorial(viendoPerfil.id, fecha)}
+          onReclamar={() => reclamarDeuda(viendoPerfil)}
+          onClose={() => setViendoPerfilId(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// Perfil de un alumno particular: registrar clases (con fecha elegida a mano,
+// no solo "esta semana", por si el horario no se mantiene siempre igual) y
+// ver el historial completo de asistencia y pagos en un solo lugar.
+function ParticularPerfilModal({ particular: p, estadosSesion, onRegistrar, onMarcarPagada, onQuitar, onReclamar, onClose }) {
+  const [fechaElegida, setFechaElegida] = useState(p.dia ? fechaSesionActual(p.dia) : today());
+  const historial = p.historial || [];
+  const entrada = historial.find(h => h.fecha === fechaElegida);
+  const adeudadas = historial.filter(h => !h.pagada && h.estado !== 'cancelado_aviso');
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-white rounded-2xl max-w-lg w-full my-8 max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white border-b border-stone-200 px-6 py-4 flex items-center justify-between">
+          <div>
+            <h2 className="font-semibold text-lg">{p.nombre}</h2>
+            <p className="text-xs text-stone-500 mt-0.5">
+              {p.profesor || 'Sin profesor'} · {p.dia || 'Sin día'} {p.horaInicio || ''} · {p.duracionMin || 60} min
+            </p>
+          </div>
+          <button onClick={onClose} className="text-stone-400 hover:text-stone-700"><X size={20} /></button>
+        </div>
+
+        <div className="p-6 space-y-5">
+          <div>
+            <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Registrar una clase</label>
+            <p className="text-xs text-stone-400 mt-0.5 mb-2">
+              Por defecto sugiere la fecha de esta semana, pero podés elegir cualquier otra (por si ese horario cambió puntualmente).
+            </p>
+            <input
+              type="date"
+              value={fechaElegida}
+              onChange={e => setFechaElegida(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-stone-200 bg-white text-sm mb-2"
+            />
+            {entrada ? (
+              <div className="flex items-center gap-2 flex-wrap bg-stone-50 border border-stone-200 rounded-lg p-3">
+                <span className={`text-xs px-2 py-1 rounded ${estadosSesion[entrada.estado].badgeClass}`}>
+                  {estadosSesion[entrada.estado].label}
+                </span>
+                {entrada.estado !== 'cancelado_aviso' && (
+                  entrada.pagada ? (
+                    <span className="text-xs text-emerald-600 font-medium">Pagada ✓</span>
+                  ) : (
+                    <>
+                      <span className="text-xs text-red-600 font-medium">Pendiente de pago</span>
+                      <button
+                        onClick={() => onMarcarPagada(fechaElegida, true)}
+                        className="text-xs px-2 py-1 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 rounded-lg font-medium"
+                      >
+                        Ya la pagó
+                      </button>
+                    </>
+                  )
+                )}
+                <button
+                  onClick={() => onQuitar(fechaElegida)}
+                  className="text-xs px-2 py-1 text-stone-500 hover:text-red-600 hover:bg-red-50 rounded-lg ml-auto"
+                >
+                  Borrar registro
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={() => onRegistrar(fechaElegida, 'asistio')}
+                  className="text-xs px-3 py-1.5 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 rounded-lg font-medium"
+                >
+                  Asistió
+                </button>
+                <button
+                  onClick={() => onRegistrar(fechaElegida, 'cancelado_aviso')}
+                  className="text-xs px-3 py-1.5 bg-stone-200 text-stone-700 hover:bg-stone-300 rounded-lg font-medium"
+                >
+                  Canceló con aviso
+                </button>
+                <button
+                  onClick={() => onRegistrar(fechaElegida, 'no_show')}
+                  className="text-xs px-3 py-1.5 bg-amber-100 text-amber-700 hover:bg-amber-200 rounded-lg font-medium"
+                >
+                  Faltó sin avisar
+                </button>
+              </div>
+            )}
+          </div>
+
+          {adeudadas.length > 0 && (
+            <div>
+              <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Clases adeudadas</label>
+              <div className="flex items-center gap-2 flex-wrap mt-2">
+                {adeudadas.slice().sort((a, b) => a.fecha.localeCompare(b.fecha)).map(h => (
+                  <button
+                    key={h.fecha}
+                    onClick={() => onMarcarPagada(h.fecha, true)}
+                    title={`${estadosSesion[h.estado].label} — click para marcar como pagada`}
+                    className="text-xs px-2 py-0.5 bg-red-50 text-red-700 hover:bg-red-100 rounded-full border border-red-200"
+                  >
+                    {fmtFechaCorta(h.fecha)} ✕
+                  </button>
+                ))}
+                <button
+                  onClick={onReclamar}
+                  className="text-xs px-2 py-0.5 bg-stone-700 hover:bg-stone-800 text-white rounded-full flex items-center gap-1"
+                >
+                  <MessageCircle size={11} /> Reclamar por WhatsApp
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div>
+            <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Historial completo ({historial.length})</label>
+            {historial.length === 0 ? (
+              <p className="text-xs text-stone-400 mt-2">Sin clases registradas todavía.</p>
+            ) : (
+              <div className="mt-2 flex flex-col gap-1.5">
+                {[...historial].sort((a, b) => b.fecha.localeCompare(a.fecha)).map(h => {
+                  const info = estadosSesion[h.estado];
+                  return (
+                    <div key={h.fecha} className="flex items-center gap-2 text-xs">
+                      <span className="font-medium text-stone-700 w-10">{fmtFechaCorta(h.fecha)}</span>
+                      <span className={`px-1.5 py-0.5 rounded ${info.badgeClass}`}>{info.label}</span>
+                      {h.estado !== 'cancelado_aviso' && (
+                        <span className={h.pagada ? 'text-emerald-600' : 'text-red-600'}>
+                          {h.pagada ? 'Pagada ✓' : 'Pendiente de pago'}
+                        </span>
+                      )}
+                      <button
+                        onClick={() => onQuitar(h.fecha)}
+                        title="Quitar este registro (si se cargó por error)"
+                        className="text-stone-300 hover:text-red-500 ml-auto"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <button onClick={onClose} className="w-full px-4 py-2.5 rounded-lg border border-stone-200 hover:bg-stone-50 font-medium text-sm">
+            Cerrar
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
