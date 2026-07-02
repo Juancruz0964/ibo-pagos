@@ -912,7 +912,7 @@ function PagoDetalleModal({ alumno, periodo, anio, estadoCuota, onClose, onDelet
             <Avatar alumno={alumno} size="lg" />
             <div className="flex-1">
               <div className="font-semibold">{fullName(alumno)}</div>
-              <div className="text-sm text-stone-500">{periodo.full} {anio}</div>
+              <div className="text-sm text-stone-500">{periodo.full}</div>
             </div>
             <div className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
               esParcial ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
@@ -1112,7 +1112,7 @@ function AlumnoPagoCard({ alumno, curso, data, update, anio, isSelected, toggleP
             return (
               <button
                 key={p.id}
-                onClick={() => update && confirm(`¿Reactivar ${p.full} ${anio} para ${alumno.nombre}? Volverá a figurar como pendiente.`) && toggleAnulada(p.id)}
+                onClick={() => update && confirm(`¿Reactivar ${p.full} para ${alumno.nombre}? Volverá a figurar como pendiente.`) && toggleAnulada(p.id)}
                 title={`${p.full} — no corresponde (click para reactivar)`}
                 className="flex flex-col items-center justify-center py-3 rounded-xl border border-dashed border-stone-200 text-[11px] font-semibold tracking-wide text-stone-400 bg-stone-50/60 hover:bg-stone-100"
               >
@@ -1157,7 +1157,7 @@ function AlumnoPagoCard({ alumno, curso, data, update, anio, isSelected, toggleP
                   title="Marcar que esta cuota no corresponde (ej: alumno que empezó más tarde)"
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (confirm(`¿Marcar ${p.full} ${anio} como "no corresponde" para ${alumno.nombre}?`)) {
+                    if (confirm(`¿Marcar ${p.full} como "no corresponde" para ${alumno.nombre}?`)) {
                       toggleAnulada(p.id);
                     }
                   }}
@@ -1252,9 +1252,9 @@ function CalcularImporteModal({ data, update, selectedPeriodos, onClose }) {
 
   const generarMensaje = (g) => {
     const multi = g.alumnos.length > 1;
-    const periodosTxt = [...new Set(g.lineas.map(l => `${l.periodo.full} ${l.anio}`))].join(', ');
+    const periodosTxt = [...new Set(g.lineas.map(l => l.periodo.full))].join(', ');
     const detalle = g.lineas
-      .map(l => `${multi ? l.alumno.nombre + ' - ' : ''}${l.periodo.full} ${l.anio}: ${fmtMoney(l.calc.efectivo)}`)
+      .map(l => `${multi ? l.alumno.nombre + ' - ' : ''}${l.periodo.full}: ${fmtMoney(l.calc.efectivo)}`)
       .join('\n');
     const template = cfg.plantillaWhatsAppCotizacion ||
       'Hola {nombre}! El importe de {periodos} en {instituto} es:\n{detalle}\nTotal: {total} (efectivo) / {totalTransferencia} (transferencia o MP).';
@@ -1296,7 +1296,7 @@ function CalcularImporteModal({ data, update, selectedPeriodos, onClose }) {
                 <div className="space-y-1 text-sm">
                   {g.lineas.map((l, i) => (
                     <div key={i} className="flex justify-between text-stone-600">
-                      <span>{g.alumnos.length > 1 ? `${l.alumno.nombre} — ` : ''}{l.periodo.full} {l.anio}</span>
+                      <span>{g.alumnos.length > 1 ? `${l.alumno.nombre} — ` : ''}{l.periodo.full}</span>
                       <span className="font-medium text-stone-900">{fmtMoney(l.calc.efectivo)}</span>
                     </div>
                   ))}
@@ -1550,7 +1550,7 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
     const partes = [];
 
     if (totalesItems.length > 0) {
-      const periodos = totalesItems.map(it => `${it.periodo.full} ${it.anio}`).join(', ');
+      const periodos = totalesItems.map(it => it.periodo.full).join(', ');
       const totalMonto = totalesItems.reduce((s, it) => s + it.monto, 0);
       let mensaje = replaceVars(cfg.plantillaWhatsApp, {
         nombre: alumno.contactoNombre || alumno.nombre,
@@ -1570,7 +1570,7 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
       partes.push(replaceVars(cfg.plantillaWhatsAppParcial || 'Hola {nombre}! Recibimos un pago parcial de {monto} ({medio}) para la cuota de {periodo} en {instituto}. Saldo pendiente: {saldo}. ¡Gracias!', {
         nombre: alumno.contactoNombre || alumno.nombre,
         monto: fmtMoney(it.monto),
-        periodo: `${it.periodo.full} ${it.anio}`,
+        periodo: it.periodo.full,
         instituto: inst,
         saldo: fmtMoney(it.saldoRestante),
         medio
@@ -1581,7 +1581,7 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
       partes.push(replaceVars(cfg.plantillaWhatsAppSaldo || 'Hola {nombre}! Confirmamos el pago del saldo pendiente de {periodo} ({monto} en {medio}) en {instituto}. ¡Cuota saldada!', {
         nombre: alumno.contactoNombre || alumno.nombre,
         monto: fmtMoney(it.monto),
-        periodo: `${it.periodo.full} ${it.anio}`,
+        periodo: it.periodo.full,
         instituto: inst,
         medio
       }));
@@ -1791,7 +1791,7 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
                   <div key={k} className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-800 flex gap-2">
                     <AlertCircle size={16} className="shrink-0 mt-0.5" />
                     <div>
-                      <div className="font-medium">{fullName(l.alumno)} – {l.periodo.full} {l.anio}</div>
+                      <div className="font-medium">{fullName(l.alumno)} – {l.periodo.full}</div>
                       <div className="text-xs">{l.calc.error}</div>
                     </div>
                   </div>
@@ -1808,7 +1808,7 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
                           {fullName(l.alumno)}
                           <span className="text-[10px] font-bold px-1.5 py-0.5 bg-emerald-700 text-white rounded">SALDO</span>
                         </div>
-                        <div className="text-xs text-stone-500">{l.periodo.full} {l.anio} · Saldo pendiente</div>
+                        <div className="text-xs text-stone-500">{l.periodo.full} · Saldo pendiente</div>
                       </div>
                       <div className="text-right">
                         <div className="text-xs text-stone-500">A cobrar</div>
@@ -1837,7 +1837,7 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
                   <div className="flex items-center justify-between mb-2">
                     <div>
                       <div className="font-medium text-sm">{fullName(l.alumno)}</div>
-                      <div className="text-xs text-stone-500">{l.periodo.full} {l.anio} · {l.calc.etapa}</div>
+                      <div className="text-xs text-stone-500">{l.periodo.full} · {l.calc.etapa}</div>
                     </div>
                     <div className="text-xs text-stone-400">
                       {l.calc.recargoPct > 0 && <span>+{l.calc.recargoPct}% recargo · </span>}
@@ -4764,7 +4764,7 @@ function DeudoresView({ data, update }) {
   const generarMensaje = (alumno) =>
     plantilla
       .replace('{nombre}', alumno.contactoNombre || alumno.nombre)
-      .replace('{mes}', `${periodoObj?.full || ''} ${anio}`)
+      .replace('{mes}', periodoObj?.full || '')
       .replace('{instituto}', data.configuracion.nombreInstituto);
 
   const guardarContacto = (alumnoId, nombreContacto) => {
@@ -4814,7 +4814,7 @@ function DeudoresView({ data, update }) {
 
         {totalDeudores > 0 && (
           <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-amber-800 text-sm font-medium">
-            {totalDeudores} alumno{totalDeudores !== 1 ? 's' : ''} sin pago en {periodoObj?.full} {anio}
+            {totalDeudores} alumno{totalDeudores !== 1 ? 's' : ''} sin pago en {periodoObj?.full}
           </div>
         )}
 
@@ -4837,7 +4837,7 @@ function DeudoresView({ data, update }) {
       {totalDeudores === 0 ? (
         <div className="bg-white rounded-2xl border border-stone-200 p-12 text-center text-stone-400">
           <Check size={32} className="mx-auto mb-3 text-emerald-500 opacity-60" />
-          <p className="text-sm">No hay deudores para {periodoObj?.full} {anio}</p>
+          <p className="text-sm">No hay deudores para {periodoObj?.full}</p>
         </div>
       ) : (
         deudoresPorCurso.map(({ curso, alumnos }) => (
