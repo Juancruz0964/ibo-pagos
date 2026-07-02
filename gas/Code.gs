@@ -107,7 +107,7 @@ function saveData(ss, data) {
   sheet.clearContents();
 
   var rows = [];
-  var simpleKeys = ['cursos', 'configuracion', 'gruposFamiliares', 'promociones'];
+  var simpleKeys = ['cursos', 'configuracion', 'gruposFamiliares', 'promociones', 'alumnosParticulares'];
 
   simpleKeys.forEach(function(key) {
     if (data[key] !== undefined) {
