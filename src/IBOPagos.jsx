@@ -3139,55 +3139,44 @@ function ParticularesTab({ data, update }) {
 
   // Marca la sesión de ESTA semana (según el día configurado) como pagada o no.
   // Si no se pagó, la fecha queda guardada en fechasAdeudadas para reclamarla después.
-  const marcarSesion = (id, fecha, pagada) => {
+  // Registra qué pasó con la clase de una fecha puntual: asistió, canceló con
+  // aviso (no se cobra) o faltó sin avisar (se cobra igual). Si ya había un
+  // registro para esa fecha, lo reemplaza.
+  const registrarSesion = (id, fecha, estado) => {
     update({
       alumnosParticulares: particulares.map(p => {
         if (p.id !== id) return p;
-        const adeudadas = (p.fechasAdeudadas || []).filter(f => f !== fecha);
-        const pagadas = (p.fechasPagadas || []).filter(f => f !== fecha);
-        return {
-          ...p,
-          fechasAdeudadas: pagada ? adeudadas : [...adeudadas, fecha],
-          fechasPagadas: pagada ? [...pagadas, fecha] : pagadas
-        };
+        const historial = (p.historial || []).filter(h => h.fecha !== fecha);
+        // Canceló con aviso: no corresponde cobrarla, nunca queda como deuda
+        const pagada = estado === 'cancelado_aviso';
+        return { ...p, historial: [...historial, { fecha, estado, pagada }] };
       })
     });
   };
 
-  // Salda una fecha puntual de la lista de adeudadas (cuando finalmente la paga)
-  const saldarFecha = (id, fecha) => {
+  // Marca (o desmarca) el pago de una fecha ya registrada en el historial
+  const marcarPagadaHistorial = (id, fecha, pagada) => {
     update({
       alumnosParticulares: particulares.map(p => {
         if (p.id !== id) return p;
-        return {
-          ...p,
-          fechasAdeudadas: (p.fechasAdeudadas || []).filter(f => f !== fecha),
-          fechasPagadas: [...(p.fechasPagadas || []), fecha]
-        };
+        return { ...p, historial: (p.historial || []).map(h => h.fecha === fecha ? { ...h, pagada } : h) };
       })
     });
   };
 
-  // Registra que el alumno vino hoy (o quita el registro si se tocó por error)
-  const toggleAsistenciaHoy = (id) => {
-    const hoy = today();
-    update({
-      alumnosParticulares: particulares.map(p => {
-        if (p.id !== id) return p;
-        const asistencias = p.asistencias || [];
-        const yaAsistio = asistencias.includes(hoy);
-        return { ...p, asistencias: yaAsistio ? asistencias.filter(f => f !== hoy) : [...asistencias, hoy] };
-      })
-    });
-  };
-
-  // Quita una fecha puntual del historial de asistencia (por si se cargó mal)
-  const quitarAsistencia = (id, fecha) => {
+  // Quita un registro puntual del historial (por si se cargó por error)
+  const quitarHistorial = (id, fecha) => {
     update({
       alumnosParticulares: particulares.map(p =>
-        p.id === id ? { ...p, asistencias: (p.asistencias || []).filter(f => f !== fecha) } : p
+        p.id === id ? { ...p, historial: (p.historial || []).filter(h => h.fecha !== fecha) } : p
       )
     });
+  };
+
+  const ESTADOS_SESION = {
+    asistio: { label: 'Asistió', badgeClass: 'bg-emerald-50 text-emerald-700' },
+    cancelado_aviso: { label: 'Canceló con aviso', badgeClass: 'bg-stone-100 text-stone-600' },
+    no_show: { label: 'Faltó sin avisar', badgeClass: 'bg-amber-50 text-amber-700' }
   };
 
   const enviarWA = (p) => {
@@ -3211,7 +3200,8 @@ function ParticularesTab({ data, update }) {
   };
 
   const reclamarDeuda = (p) => {
-    const fechas = (p.fechasAdeudadas || []).slice().sort().map(fmtFechaCorta).join(', ');
+    const adeudadas = (p.historial || []).filter(h => !h.pagada && h.estado !== 'cancelado_aviso').map(h => h.fecha);
+    const fechas = adeudadas.slice().sort().map(fmtFechaCorta).join(', ');
     if (!fechas) return;
     const cfg = data.configuracion;
     const template = cfg.plantillaWhatsAppParticularDeuda ||
@@ -3303,11 +3293,10 @@ function ParticularesTab({ data, update }) {
             <div className="divide-y divide-stone-100">
               {filtered.map(p => {
                 const superpuesto = seSuperpone(p);
+                const historial = p.historial || [];
                 const sesion = p.dia ? fechaSesionActual(p.dia) : null;
-                const adeudadas = p.fechasAdeudadas || [];
-                const pagadas = p.fechasPagadas || [];
-                const sesionAdeuda = sesion && adeudadas.includes(sesion);
-                const sesionPagada = sesion && pagadas.includes(sesion);
+                const entradaSesion = sesion ? historial.find(h => h.fecha === sesion) : null;
+                const adeudadas = historial.filter(h => !h.pagada && h.estado !== 'cancelado_aviso');
                 return (
                   <div key={p.id} className={`px-5 py-3 hover:bg-stone-50 ${!p.activo ? 'opacity-50' : ''}`}>
                     <div className="flex items-center gap-3">
@@ -3354,36 +3343,46 @@ function ParticularesTab({ data, update }) {
 
                     {sesion && (
                       <div className="mt-2 ml-12 flex items-center gap-2 flex-wrap">
-                        {sesionAdeuda ? (
+                        {!entradaSesion ? (
                           <>
-                            <span className="text-xs px-2 py-1 bg-red-50 text-red-700 rounded-lg">
-                              Semana del {fmtFechaCorta(sesion)}: no se pagó
-                            </span>
+                            <span className="text-xs text-stone-500">¿Qué pasó con la clase de esta semana ({fmtFechaCorta(sesion)})?</span>
                             <button
-                              onClick={() => saldarFecha(p.id, sesion)}
+                              onClick={() => registrarSesion(p.id, sesion, 'asistio')}
                               className="text-xs px-2 py-1 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 rounded-lg font-medium"
                             >
-                              Ya la pagó
+                              Asistió
+                            </button>
+                            <button
+                              onClick={() => registrarSesion(p.id, sesion, 'cancelado_aviso')}
+                              className="text-xs px-2 py-1 bg-stone-200 text-stone-700 hover:bg-stone-300 rounded-lg font-medium"
+                            >
+                              Canceló con aviso
+                            </button>
+                            <button
+                              onClick={() => registrarSesion(p.id, sesion, 'no_show')}
+                              className="text-xs px-2 py-1 bg-amber-100 text-amber-700 hover:bg-amber-200 rounded-lg font-medium"
+                            >
+                              Faltó sin avisar
                             </button>
                           </>
-                        ) : sesionPagada ? (
+                        ) : entradaSesion.estado === 'cancelado_aviso' ? (
+                          <span className="text-xs px-2 py-1 bg-stone-100 text-stone-600 rounded-lg">
+                            Semana del {fmtFechaCorta(sesion)}: canceló con aviso (no se cobra)
+                          </span>
+                        ) : entradaSesion.pagada ? (
                           <span className="text-xs px-2 py-1 bg-emerald-50 text-emerald-700 rounded-lg">
-                            Semana del {fmtFechaCorta(sesion)}: pagada ✓
+                            Semana del {fmtFechaCorta(sesion)}: {ESTADOS_SESION[entradaSesion.estado].label.toLowerCase()} · pagada ✓
                           </span>
                         ) : (
                           <>
-                            <span className="text-xs text-stone-500">¿Se pagó la clase de esta semana ({fmtFechaCorta(sesion)})?</span>
+                            <span className="text-xs px-2 py-1 bg-amber-50 text-amber-700 rounded-lg">
+                              Semana del {fmtFechaCorta(sesion)}: {ESTADOS_SESION[entradaSesion.estado].label.toLowerCase()} · pendiente de pago
+                            </span>
                             <button
-                              onClick={() => marcarSesion(p.id, sesion, true)}
+                              onClick={() => marcarPagadaHistorial(p.id, sesion, true)}
                               className="text-xs px-2 py-1 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 rounded-lg font-medium"
                             >
-                              Sí
-                            </button>
-                            <button
-                              onClick={() => marcarSesion(p.id, sesion, false)}
-                              className="text-xs px-2 py-1 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg font-medium"
-                            >
-                              No
+                              Ya la pagó
                             </button>
                           </>
                         )}
@@ -3392,15 +3391,15 @@ function ParticularesTab({ data, update }) {
 
                     {adeudadas.length > 0 && (
                       <div className="mt-2 ml-12 flex items-center gap-2 flex-wrap">
-                        <span className="text-xs text-stone-500">Fechas adeudadas:</span>
-                        {adeudadas.slice().sort().map(f => (
+                        <span className="text-xs text-stone-500">Clases adeudadas:</span>
+                        {adeudadas.slice().sort((a, b) => a.fecha.localeCompare(b.fecha)).map(h => (
                           <button
-                            key={f}
-                            onClick={() => saldarFecha(p.id, f)}
-                            title="Click para marcar como pagada"
+                            key={h.fecha}
+                            onClick={() => marcarPagadaHistorial(p.id, h.fecha, true)}
+                            title={`${ESTADOS_SESION[h.estado].label} — click para marcar como pagada`}
                             className="text-xs px-2 py-0.5 bg-red-50 text-red-700 hover:bg-red-100 rounded-full border border-red-200"
                           >
-                            {fmtFechaCorta(f)} ✕
+                            {fmtFechaCorta(h.fecha)} ✕
                           </button>
                         ))}
                         <button
@@ -3412,41 +3411,38 @@ function ParticularesTab({ data, update }) {
                       </div>
                     )}
 
-                    <div className="mt-2 ml-12 flex items-center gap-2 flex-wrap">
-                      <button
-                        onClick={() => toggleAsistenciaHoy(p.id)}
-                        className={`text-xs px-2 py-1 rounded-lg font-medium flex items-center gap-1 ${
-                          (p.asistencias || []).includes(today())
-                            ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
-                            : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-                        }`}
-                      >
-                        <Check size={12} /> {(p.asistencias || []).includes(today()) ? 'Vino hoy ✓' : 'Marcar que vino hoy'}
-                      </button>
-                      {(p.asistencias || []).length > 0 && (
+                    {historial.length > 0 && (
+                      <div className="mt-2 ml-12">
                         <button
                           onClick={() => setHistorialAbierto(historialAbierto === p.id ? null : p.id)}
                           className="text-xs px-2 py-1 text-stone-500 hover:text-stone-800 hover:bg-stone-100 rounded-lg flex items-center gap-1"
                         >
-                          <History size={12} /> Historial ({(p.asistencias || []).length}) {historialAbierto === p.id ? '▲' : '▼'}
+                          <History size={12} /> Ver historial completo ({historial.length}) {historialAbierto === p.id ? '▲' : '▼'}
                         </button>
-                      )}
-                    </div>
-                    {historialAbierto === p.id && (
-                      <div className="mt-2 ml-12 flex items-center gap-2 flex-wrap">
-                        {(p.asistencias || []).length === 0 ? (
-                          <span className="text-xs text-stone-400">Sin asistencias registradas todavía</span>
-                        ) : (
-                          [...(p.asistencias || [])].sort().reverse().map(f => (
-                            <button
-                              key={f}
-                              onClick={() => quitarAsistencia(p.id, f)}
-                              title="Click para quitar (si se cargó por error)"
-                              className="text-xs px-2 py-0.5 bg-stone-50 text-stone-600 hover:bg-stone-100 rounded-full border border-stone-200"
-                            >
-                              {fmtFechaCorta(f)} ✕
-                            </button>
-                          ))
+                        {historialAbierto === p.id && (
+                          <div className="mt-2 flex flex-col gap-1.5">
+                            {[...historial].sort((a, b) => b.fecha.localeCompare(a.fecha)).map(h => {
+                              const info = ESTADOS_SESION[h.estado];
+                              return (
+                                <div key={h.fecha} className="flex items-center gap-2 text-xs">
+                                  <span className="font-medium text-stone-700 w-10">{fmtFechaCorta(h.fecha)}</span>
+                                  <span className={`px-1.5 py-0.5 rounded ${info.badgeClass}`}>{info.label}</span>
+                                  {h.estado !== 'cancelado_aviso' && (
+                                    <span className={h.pagada ? 'text-emerald-600' : 'text-red-600'}>
+                                      {h.pagada ? 'Pagada ✓' : 'Pendiente de pago'}
+                                    </span>
+                                  )}
+                                  <button
+                                    onClick={() => quitarHistorial(p.id, h.fecha)}
+                                    title="Quitar este registro (si se cargó por error)"
+                                    className="text-stone-300 hover:text-red-500"
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
                         )}
                       </div>
                     )}
@@ -3516,7 +3512,7 @@ function ParticularesTab({ data, update }) {
 
 function ParticularForm({ particular, profesoresExistentes, onSave, onClose }) {
   const [form, setForm] = useState(particular || {
-    nombre: '', celular: '', profesor: '', modalidad: 'profe', dia: 'Lunes', horaInicio: '', duracionMin: 60, activo: true, observaciones: '', fechasAdeudadas: [], fechasPagadas: [], asistencias: []
+    nombre: '', celular: '', profesor: '', modalidad: 'profe', dia: 'Lunes', horaInicio: '', duracionMin: 60, activo: true, observaciones: '', historial: []
   });
   const set = (k, v) => setForm({ ...form, [k]: v });
 
