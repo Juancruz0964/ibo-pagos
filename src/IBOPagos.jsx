@@ -1312,6 +1312,7 @@ function CalcularImporteModal({ data, update, selectedPeriodos, onClose }) {
 function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
   const [step, setStep] = useState('payment'); // 'payment' | 'whatsapp'
   const [waGroups, setWaGroups] = useState([]);
+  const [waSinCelular, setWaSinCelular] = useState([]);
 
   // Calcular cuotas para cada selección
   const lineas = useMemo(() => selectedPeriodos.map(sp => {
@@ -1540,11 +1541,13 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
       )
     });
 
-    // Calcular grupos de WhatsApp
+    // Calcular grupos de WhatsApp. Los alumnos sin celular van aparte, para
+    // poder cargarlo ahí mismo en vez de perder la posibilidad de avisarles.
     const grupos = {};
+    const faltaCelular = [];
     Object.values(totales.detallePorAlumno).forEach(({ alumno, items, total }) => {
       const tel = formatPhoneForWA(alumno.celular);
-      if (!tel) return;
+      if (!tel) { faltaCelular.push({ alumno, items, total }); return; }
       if (!grupos[tel]) grupos[tel] = { phone: tel, rawPhone: alumno.celular, alumnos: [], items: [], total: 0 };
       grupos[tel].alumnos.push(alumno);
       grupos[tel].items.push(...items.map(it => ({ ...it, alumnoNombre: alumno.nombre })));
@@ -1560,6 +1563,7 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
     }));
 
     setWaGroups(gruposArr);
+    setWaSinCelular(faltaCelular);
     setStep('whatsapp');
   };
 
@@ -1574,6 +1578,21 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
         : generarMensajeIndividual(alumnosPatched[0], g.items, usaMixto, distribuciones);
       return { ...g, alumnos: alumnosPatched, mensaje };
     }));
+  };
+
+  // Completa el celular (y opcionalmente el nombre de contacto) de un alumno
+  // que no tenía celular cargado, y arma su grupo de WhatsApp al instante.
+  const completarCelularYAgregar = (alumnoId, celular, contactoNombre) => {
+    const entry = waSinCelular.find(s => s.alumno.id === alumnoId);
+    if (!entry) return;
+    const alumnoPatched = { ...entry.alumno, celular, contactoNombre: contactoNombre || entry.alumno.contactoNombre };
+    update({ alumnos: data.alumnos.map(a => a.id === alumnoId ? alumnoPatched : a) });
+    const tel = formatPhoneForWA(celular);
+    const mensaje = generarMensajeIndividual(alumnoPatched, entry.items, usaMixto, distribuciones);
+    setWaGroups(prev => [...prev, {
+      phone: tel, rawPhone: celular, alumnos: [alumnoPatched], items: entry.items, total: entry.total, sent: false, mensaje
+    }]);
+    setWaSinCelular(prev => prev.filter(s => s.alumno.id !== alumnoId));
   };
 
   const sendWA = (idx) => {
@@ -1600,16 +1619,26 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
           </div>
 
           <div className="p-6 space-y-3">
-            {waGroups.length === 0 ? (
+            {waGroups.length === 0 && waSinCelular.length === 0 ? (
               <div className="text-center text-stone-500 py-8">
                 <AlertCircle size={28} className="mx-auto mb-2 text-stone-400" />
                 Ninguno de los alumnos tiene celular cargado. No se puede enviar WhatsApp.
               </div>
             ) : (
               <>
-                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-xs text-emerald-800">
-                  Hacé click en cada botón para enviar el WhatsApp. Se abre una pestaña nueva por mensaje (los hermanos con mismo celular reciben un solo mensaje agrupado).
-                </div>
+                {waGroups.length > 0 && (
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-xs text-emerald-800">
+                    Hacé click en cada botón para enviar el WhatsApp. Se abre una pestaña nueva por mensaje (los hermanos con mismo celular reciben un solo mensaje agrupado).
+                  </div>
+                )}
+                {waSinCelular.map(s => (
+                  <CompletarCelularCard
+                    key={s.alumno.id}
+                    alumno={s.alumno}
+                    total={s.total}
+                    onGuardar={(celular, contacto) => completarCelularYAgregar(s.alumno.id, celular, contacto)}
+                  />
+                ))}
                 {waGroups.map((g, idx) => (
                   <div key={idx} className={`border rounded-xl p-4 ${g.sent ? 'border-emerald-300 bg-emerald-50/40' : 'border-stone-200'}`}>
                     <div className="flex items-start justify-between gap-3 mb-2">
@@ -2826,8 +2855,6 @@ function AlumnoCuotasModal({ alumno, data, update, onClose, onEdit }) {
   );
 }
 
-// Modal chico para completar solo los datos que le faltan a un alumno,
-// sin abrir el formulario completo.
 // Prompt chico e inline para cargar un dato faltante (ej: nombre de contacto)
 // en el momento en que se necesita, sin frenar lo que se está haciendo.
 function ContactoNombreInline({ label, onSave }) {
@@ -2855,6 +2882,46 @@ function ContactoNombreInline({ label, onSave }) {
       />
       <button onClick={guardar} className="px-2 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-medium whitespace-nowrap">
         Guardar
+      </button>
+    </div>
+  );
+}
+
+// Tarjeta para completar celular (y nombre de contacto) de un alumno que no
+// lo tenía cargado, justo en el paso de enviar WhatsApp post-cobro.
+function CompletarCelularCard({ alumno, total, onGuardar }) {
+  const [celular, setCelular] = useState('');
+  const [contacto, setContacto] = useState(alumno.contactoNombre || '');
+
+  return (
+    <div className="border border-amber-200 bg-amber-50/50 rounded-xl p-4 space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="font-medium text-sm">{alumno.nombre}</div>
+        <div className="text-xs text-stone-500">Total: {fmtMoney(total)}</div>
+      </div>
+      <p className="text-xs text-amber-700">No tiene celular cargado. Completalo para armar el mensaje:</p>
+      <div className="grid grid-cols-2 gap-2">
+        <input
+          type="text"
+          value={celular}
+          onChange={e => setCelular(e.target.value)}
+          placeholder="Celular. Sin 0 ni 15"
+          className="px-2 py-1.5 rounded border border-amber-300 text-sm"
+        />
+        <input
+          type="text"
+          value={contacto}
+          onChange={e => setContacto(e.target.value)}
+          placeholder="Nombre del padre/madre/tutor"
+          className="px-2 py-1.5 rounded border border-amber-300 text-sm"
+        />
+      </div>
+      <button
+        onClick={() => celular.trim() && onGuardar(celular.trim(), contacto.trim())}
+        disabled={!celular.trim()}
+        className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-medium disabled:opacity-50"
+      >
+        Guardar y armar mensaje
       </button>
     </div>
   );
