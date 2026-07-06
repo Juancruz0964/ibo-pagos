@@ -642,18 +642,25 @@ function PagosTab({ data, update }) {
   };
 
   const cobrarSaldo = (alumno, periodo, anio, saldo) => {
-    // Cerrar el modal de detalle y abrir el de cobro con la línea pre-seleccionada
+    // Cerrar el modal de detalle y abrir el de cobro sumando esta línea a lo
+    // que ya estuviera seleccionado, para poder cobrar el saldo pendiente
+    // junto con otra cuota en la misma operación.
     setPagoView(null);
+    const key = `${alumno.id}-${periodo.id}-${anio}`;
+    const nuevaLinea = { alumnoId: alumno.id, periodoId: periodo.id, anio, esSaldo: true, montoSaldo: saldo };
+    const yaExiste = selectedPeriodos.some(p => `${p.alumnoId}-${p.periodoId}-${p.anio}` === key);
+    const nuevasLineas = yaExiste
+      ? selectedPeriodos.map(p => (`${p.alumnoId}-${p.periodoId}-${p.anio}` === key ? nuevaLinea : p))
+      : [...selectedPeriodos, nuevaLinea];
     if (multiMode) {
-      // En modo multi, agregar el alumno si no está y seleccionar el periodo
+      // En modo multi, agregar el alumno si no está
       if (!multiAlumnos.find(m => m.id === alumno.id)) {
         setMultiAlumnos([...multiAlumnos, { id: alumno.id }]);
       }
-      setSelectedPeriodos([{ alumnoId: alumno.id, periodoId: periodo.id, anio, esSaldo: true, montoSaldo: saldo }]);
     } else {
       setSelectedAlumnoId(alumno.id);
-      setSelectedPeriodos([{ alumnoId: alumno.id, periodoId: periodo.id, anio, esSaldo: true, montoSaldo: saldo }]);
     }
+    setSelectedPeriodos(nuevasLineas);
     setShowPaymentModal(true);
   };
 
@@ -2862,8 +2869,17 @@ function AlumnoCuotasModal({ alumno, data, update, onClose, onEdit }) {
   };
 
   const cobrarSaldo = (periodo, anioSaldo, saldo) => {
+    // Sumar esta línea a lo que ya estuviera seleccionado, para poder
+    // cobrar el saldo pendiente junto con otra cuota en la misma operación.
     setPagoView(null);
-    setSelectedPeriodos([{ alumnoId: alumno.id, periodoId: periodo.id, anio: anioSaldo, esSaldo: true, montoSaldo: saldo }]);
+    const key = `${alumno.id}-${periodo.id}-${anioSaldo}`;
+    const nuevaLinea = { alumnoId: alumno.id, periodoId: periodo.id, anio: anioSaldo, esSaldo: true, montoSaldo: saldo };
+    const yaExiste = selectedPeriodos.some(p => `${p.alumnoId}-${p.periodoId}-${p.anio}` === key);
+    setSelectedPeriodos(
+      yaExiste
+        ? selectedPeriodos.map(p => (`${p.alumnoId}-${p.periodoId}-${p.anio}` === key ? nuevaLinea : p))
+        : [...selectedPeriodos, nuevaLinea]
+    );
     setShowPaymentModal(true);
   };
 
