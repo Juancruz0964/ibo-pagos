@@ -106,7 +106,7 @@ const initialState = {
     plantillaWhatsApp: 'Hola {nombre}! Confirmamos el pago de {periodos} en {instituto} por {total} ({medio}). ¡Muchas gracias!',
     plantillaWhatsAppParcial: 'Hola {nombre}! Recibimos un pago parcial de {monto} ({medio}) para la cuota de {periodo} en {instituto}. Saldo pendiente: {saldo}. ¡Gracias!',
     plantillaWhatsAppSaldo: 'Hola {nombre}! Confirmamos el pago del saldo pendiente de {periodo} ({monto} en {medio}) en {instituto}. ¡Cuota saldada!',
-    plantillaWhatsAppCotizacion: 'Hola {nombre}! El importe de {periodos} en {instituto} es:\n{detalle}\nTotal: {total} (efectivo) / {totalTransferencia} (transferencia o MP).',
+    plantillaWhatsAppCotizacion: 'Hola, {nombre}! El importe de {periodos} es:\n*Por transferencia*\n{detalleTransferencia}\n*Total: {totalTransferencia}*\n\n*En efectivo*\n{detalleEfectivo}\n*Total: {total}*',
     plantillaWhatsAppParticular: 'Hola {nombre}! Se agendó la clase el día {fecha} a la {hora} con el profesor/a {profesor}.',
     plantillaWhatsAppParticularDeuda: 'Hola {nombre}! Nos quedaron pendientes de pago las clases del {fechas} en {instituto}. Cualquier consulta escribinos, ¡gracias!',
     precioClaseProfe: 0,
@@ -1258,18 +1258,29 @@ function CalcularImporteModal({ data, update, selectedPeriodos, onClose }) {
   const gruposArr = Object.values(grupos);
 
   const generarMensaje = (g) => {
-    const multi = g.alumnos.length > 1;
     const periodosTxt = [...new Set(g.lineas.map(l => l.periodo.full))].join(', ');
-    const detalle = g.lineas
-      .map(l => `${multi ? l.alumno.nombre + ' - ' : ''}${l.periodo.full}: ${fmtMoney(l.calc.efectivo)}`)
-      .join('\n');
-    const template = cfg.plantillaWhatsAppCotizacion ||
-      'Hola {nombre}! El importe de {periodos} en {instituto} es:\n{detalle}\nTotal: {total} (efectivo) / {totalTransferencia} (transferencia o MP).';
+    // Si son varios períodos distintos hay que aclarar cuál es cuál; si es
+    // uno solo (el caso común, hermanos pagando el mismo mes) alcanza con
+    // el nombre del alumno en cada línea.
+    const periodosUnicos = new Set(g.lineas.map(l => l.periodo.id)).size;
+    const lineLabel = (l) => periodosUnicos > 1 ? `${l.alumno.nombre} (${l.periodo.full})` : l.alumno.nombre;
+    const detalleTransferencia = g.lineas.map(l => `${lineLabel(l)}: ${fmtMoney(l.calc.transferencia)}`).join('\n');
+    const detalleEfectivo = g.lineas.map(l => `${lineLabel(l)}: ${fmtMoney(l.calc.efectivo)}`).join('\n');
+    // Si dos hermanos comparten el mismo celular y el mismo contacto (padre/
+    // madre/tutor), no repetir su nombre dos veces en el saludo.
+    const nombreContacto = [...new Set(g.alumnos.map(a => a.contactoNombre || a.nombre))].join(' y ');
+    const defaultTemplate = 'Hola, {nombre}! El importe de {periodos} es:\n*Por transferencia*\n{detalleTransferencia}\n*Total: {totalTransferencia}*\n\n*En efectivo*\n{detalleEfectivo}\n*Total: {total}*';
+    // Si la plantilla guardada es la vieja (usa la variable {detalle}, que ya
+    // no existe), se usa la nueva por defecto en su lugar.
+    const template = (cfg.plantillaWhatsAppCotizacion && !cfg.plantillaWhatsAppCotizacion.includes('{detalle}'))
+      ? cfg.plantillaWhatsAppCotizacion
+      : defaultTemplate;
     return template
-      .replace('{nombre}', g.alumnos.map(a => a.contactoNombre || a.nombre).join(' y '))
+      .replace('{nombre}', nombreContacto)
       .replace('{periodos}', periodosTxt)
       .replace('{instituto}', cfg.nombreInstituto)
-      .replace('{detalle}', detalle)
+      .replace('{detalleTransferencia}', detalleTransferencia)
+      .replace('{detalleEfectivo}', detalleEfectivo)
       .replace('{totalTransferencia}', fmtMoney(g.totalTransferencia))
       .replace('{total}', fmtMoney(g.totalEfectivo));
   };
@@ -4515,7 +4526,7 @@ function ConfigTab({ data, update }) {
             className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 text-sm"
           />
           <p className="text-xs text-stone-400 mt-1">
-            Variables: <code className="bg-stone-100 px-1 rounded">{'{nombre}'}</code> <code className="bg-stone-100 px-1 rounded">{'{periodos}'}</code> <code className="bg-stone-100 px-1 rounded">{'{instituto}'}</code> <code className="bg-stone-100 px-1 rounded">{'{detalle}'}</code> <code className="bg-stone-100 px-1 rounded">{'{total}'}</code> <code className="bg-stone-100 px-1 rounded">{'{totalTransferencia}'}</code>
+            Variables: <code className="bg-stone-100 px-1 rounded">{'{nombre}'}</code> <code className="bg-stone-100 px-1 rounded">{'{periodos}'}</code> <code className="bg-stone-100 px-1 rounded">{'{instituto}'}</code> <code className="bg-stone-100 px-1 rounded">{'{detalleEfectivo}'}</code> <code className="bg-stone-100 px-1 rounded">{'{detalleTransferencia}'}</code> <code className="bg-stone-100 px-1 rounded">{'{total}'}</code> <code className="bg-stone-100 px-1 rounded">{'{totalTransferencia}'}</code>
           </p>
         </div>
 
