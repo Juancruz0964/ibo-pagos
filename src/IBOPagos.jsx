@@ -661,7 +661,8 @@ function PagosTab({ data, update }) {
       setSelectedAlumnoId(alumno.id);
     }
     setSelectedPeriodos(nuevasLineas);
-    setShowPaymentModal(true);
+    // No abrimos el cobro automáticamente: queda sumada a la selección
+    // para que pueda elegir "Cobrar" o "Calcular importe" con todo junto.
   };
 
   // ===== Multi-mode rendering =====
@@ -1240,7 +1241,11 @@ function CalcularImporteModal({ data, update, selectedPeriodos, onClose }) {
     .map(sp => {
       const alumno = data.alumnos.find(a => a.id === sp.alumnoId);
       const periodo = PERIODOS.find(p => p.id === sp.periodoId);
-      const calc = alumno ? calcularCuota(alumno, sp.periodoId, sp.anio, data) : null;
+      // El saldo pendiente de una cuota parcial no se recalcula: es un monto
+      // fijo (lo que falta cobrar), no una cuota nueva.
+      const calc = sp.esSaldo
+        ? { efectivo: sp.montoSaldo || 0, transferencia: sp.montoSaldo || 0, error: null }
+        : (alumno ? calcularCuota(alumno, sp.periodoId, sp.anio, data) : null);
       return { ...sp, alumno, periodo, calc };
     })
     .filter(l => l.alumno && l.periodo && l.calc && !l.calc.error);
@@ -1263,7 +1268,10 @@ function CalcularImporteModal({ data, update, selectedPeriodos, onClose }) {
     // uno solo (el caso común, hermanos pagando el mismo mes) alcanza con
     // el nombre del alumno en cada línea.
     const periodosUnicos = new Set(g.lineas.map(l => l.periodo.id)).size;
-    const lineLabel = (l) => periodosUnicos > 1 ? `${l.alumno.nombre} (${l.periodo.full})` : l.alumno.nombre;
+    const lineLabel = (l) => {
+      if (l.esSaldo) return `${l.alumno.nombre} (saldo ${l.periodo.full})`;
+      return periodosUnicos > 1 ? `${l.alumno.nombre} (${l.periodo.full})` : l.alumno.nombre;
+    };
     const detalleTransferencia = g.lineas.map(l => `${lineLabel(l)}: ${fmtMoney(l.calc.transferencia)}`).join('\n');
     const detalleEfectivo = g.lineas.map(l => `${lineLabel(l)}: ${fmtMoney(l.calc.efectivo)}`).join('\n');
     // Si dos hermanos comparten el mismo celular y el mismo contacto (padre/
@@ -1314,7 +1322,9 @@ function CalcularImporteModal({ data, update, selectedPeriodos, onClose }) {
                 <div className="space-y-1 text-sm">
                   {g.lineas.map((l, i) => (
                     <div key={i} className="flex justify-between text-stone-600">
-                      <span>{g.alumnos.length > 1 ? `${l.alumno.nombre} — ` : ''}{l.periodo.full}</span>
+                      <span>
+                        {g.alumnos.length > 1 ? `${l.alumno.nombre} — ` : ''}{l.periodo.full}{l.esSaldo ? ' (saldo)' : ''}
+                      </span>
                       <span className="font-medium text-stone-900">{fmtMoney(l.calc.efectivo)}</span>
                     </div>
                   ))}
@@ -2891,7 +2901,8 @@ function AlumnoCuotasModal({ alumno, data, update, onClose, onEdit }) {
         ? selectedPeriodos.map(p => (`${p.alumnoId}-${p.periodoId}-${p.anio}` === key ? nuevaLinea : p))
         : [...selectedPeriodos, nuevaLinea]
     );
-    setShowPaymentModal(true);
+    // No abrimos el cobro automáticamente: queda sumada a la selección
+    // para que pueda elegir "Cobrar" o "Calcular importe" con todo junto.
   };
 
   const onConfirmPayment = (paymentDetails) => {
