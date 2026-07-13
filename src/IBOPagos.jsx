@@ -597,8 +597,8 @@ function PagosTab({ data, update }) {
         alumnoId: sp.alumnoId,
         periodoId: sp.periodoId,
         anio: sp.anio,
-        fechaPago: today(),
-        horaPago: horaActual(),
+        fechaPago: paymentDetails.fechaPago || today(),
+        horaPago: paymentDetails.horaPago || horaActual(),
         montoCobrado: detalle?.monto || 0,
         precioFijado: detalle?.precioFijado || detalle?.monto || 0,
         montoTotal: detalle?.monto || 0, // legacy compat
@@ -1384,6 +1384,12 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
   const [waGroups, setWaGroups] = useState([]);
   const [waSinCelular, setWaSinCelular] = useState([]);
 
+  // Por defecto el pago se registra con la fecha/hora actual, pero se puede
+  // cambiar (ej: transferencias que llegaron antes y se cargan más tarde)
+  const [editandoFechaPago, setEditandoFechaPago] = useState(false);
+  const [fechaPagoManual, setFechaPagoManual] = useState(today());
+  const [horaPagoManual, setHoraPagoManual] = useState(horaActual());
+
   // Calcular cuotas para cada selección
   const lineas = useMemo(() => selectedPeriodos.map(sp => {
     const alumno = data.alumnos.find(a => a.id === sp.alumnoId);
@@ -1639,6 +1645,8 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
 
   const handleConfirm = () => {
     onConfirm({
+      fechaPago: editandoFechaPago ? fechaPagoManual : null,
+      horaPago: editandoFechaPago ? horaPagoManual : null,
       perAlumno: Object.fromEntries(
         Object.entries(totales.detallePorAlumno).map(([id, d]) => [
           id,
@@ -1816,6 +1824,45 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
         </div>
 
         <div className="p-6 space-y-5">
+          {/* Fecha y hora del pago (por defecto, ahora mismo) */}
+          <div>
+            {editandoFechaPago ? (
+              <div className="bg-stone-50 border border-stone-200 rounded-lg p-3 flex items-end gap-2 flex-wrap">
+                <div>
+                  <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Fecha en que se abonó</label>
+                  <input
+                    type="date"
+                    value={fechaPagoManual}
+                    onChange={e => setFechaPagoManual(e.target.value)}
+                    className="mt-1 px-3 py-2 rounded-lg border border-stone-200 bg-white text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Hora</label>
+                  <input
+                    type="time"
+                    value={horaPagoManual}
+                    onChange={e => setHoraPagoManual(e.target.value)}
+                    className="mt-1 px-3 py-2 rounded-lg border border-stone-200 bg-white text-sm"
+                  />
+                </div>
+                <button
+                  onClick={() => setEditandoFechaPago(false)}
+                  className="text-xs text-stone-500 hover:text-red-600 px-2 py-2"
+                >
+                  Usar el momento actual
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setEditandoFechaPago(true)}
+                className="text-xs text-stone-500 hover:text-emerald-700 underline"
+              >
+                ¿Se abonó en otro momento? Cambiar fecha y hora
+              </button>
+            )}
+          </div>
+
           {/* Líneas de pago */}
           <div className="space-y-3">
             {lineas.map(l => {
@@ -2919,8 +2966,8 @@ function AlumnoCuotasModal({ alumno, data, update, onClose, onEdit }) {
         alumnoId: sp.alumnoId,
         periodoId: sp.periodoId,
         anio: sp.anio,
-        fechaPago: today(),
-        horaPago: horaActual(),
+        fechaPago: paymentDetails.fechaPago || today(),
+        horaPago: paymentDetails.horaPago || horaActual(),
         montoCobrado: detalle?.monto || 0,
         precioFijado: detalle?.precioFijado || detalle?.monto || 0,
         montoTotal: detalle?.monto || 0,
