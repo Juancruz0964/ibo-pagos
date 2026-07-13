@@ -121,6 +121,11 @@ const initialState = {
 const fmtMoney = (n) => '$' + Math.round(n).toLocaleString('es-AR');
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 const today = () => new Date().toISOString().split('T')[0];
+// Hora local (HH:MM) al momento de cobrar, para saber cuándo exactamente se registró un pago
+const horaActual = () => {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
 
 // Redondea un monto final de cuota a múltiplos de $500, mirando los
 // últimos 3 dígitos: 0-250 baja a x000, 251-749 va a x500, 750-999
@@ -593,6 +598,7 @@ function PagosTab({ data, update }) {
         periodoId: sp.periodoId,
         anio: sp.anio,
         fechaPago: today(),
+        horaPago: horaActual(),
         montoCobrado: detalle?.monto || 0,
         precioFijado: detalle?.precioFijado || detalle?.monto || 0,
         montoTotal: detalle?.monto || 0, // legacy compat
@@ -962,7 +968,7 @@ function PagoDetalleModal({ alumno, periodo, anio, estadoCuota, onClose, onDelet
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium">{fmtMoney(monto)}</div>
                         <div className="text-xs text-stone-500">
-                          {fmtFecha(pago.fechaPago)} · {pago.metodo === 'transferencia' ? 'Transferencia/MP' : 'Efectivo'}
+                          {fmtFecha(pago.fechaPago)}{pago.horaPago ? ` ${pago.horaPago}hs` : ''} · {pago.metodo === 'transferencia' ? 'Transferencia/MP' : 'Efectivo'}
                           {idx === 0 && estadoCuota.pagos.length > 1 ? ' · 1° pago' : ''}
                         </div>
                       </div>
@@ -2914,6 +2920,7 @@ function AlumnoCuotasModal({ alumno, data, update, onClose, onEdit }) {
         periodoId: sp.periodoId,
         anio: sp.anio,
         fechaPago: today(),
+        horaPago: horaActual(),
         montoCobrado: detalle?.monto || 0,
         precioFijado: detalle?.precioFijado || detalle?.monto || 0,
         montoTotal: detalle?.monto || 0,
