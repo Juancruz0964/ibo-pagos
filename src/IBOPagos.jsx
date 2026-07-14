@@ -384,6 +384,7 @@ export default function App() {
   const [importMessage, setImportMessage] = useState(null);
   const [saveStatus, setSaveStatus] = useState('idle'); // 'idle' | 'pending' | 'saving' | 'saved' | 'error'
   const saveTimer = useRef(null);
+  const retryTimer = useRef(null);
 
   useEffect(() => {
     storage.get('ibo_data').then(saved => {
@@ -402,17 +403,27 @@ export default function App() {
     if (!loaded) return;
     setSaveStatus('pending');
     clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(async () => {
-      setSaveStatus('saving');
-      const result = await storage.set('ibo_data', data);
-      if (result.ok) {
-        setSaveStatus('saved');
-        setTimeout(() => setSaveStatus('idle'), 2500);
-      } else {
-        setSaveStatus('error');
-      }
-    }, GAS_URL ? 1500 : 0);
-    return () => clearTimeout(saveTimer.current);
+    clearTimeout(retryTimer.current);
+
+    // Si falla el guardado (típicamente por falta de conexión a internet en
+    // ese momento), reintenta solo cada vez más espaciado hasta lograrlo, en
+    // vez de quedarse en "Error al guardar" esperando que alguien lo note.
+    const intentarGuardar = (intento) => {
+      setSaveStatus(intento === 0 ? 'saving' : 'reintentando');
+      storage.set('ibo_data', data).then(result => {
+        if (result.ok) {
+          setSaveStatus('saved');
+          setTimeout(() => setSaveStatus('idle'), 2500);
+        } else {
+          setSaveStatus('error');
+          const espera = Math.min(30000, 3000 * Math.pow(2, intento));
+          retryTimer.current = setTimeout(() => intentarGuardar(intento + 1), espera);
+        }
+      });
+    };
+
+    saveTimer.current = setTimeout(() => intentarGuardar(0), GAS_URL ? 1500 : 0);
+    return () => { clearTimeout(saveTimer.current); clearTimeout(retryTimer.current); };
   }, [data, loaded]);
 
   const update = (patch) => setData(d => ({ ...d, ...patch }));
@@ -474,10 +485,11 @@ export default function App() {
 function SaveIndicator({ status }) {
   if (status === 'idle') return null;
   const map = {
-    pending:  { text: 'Sin guardar…',  cls: 'text-stone-400' },
-    saving:   { text: 'Guardando…',    cls: 'text-amber-500' },
-    saved:    { text: 'Guardado ✓',    cls: 'text-emerald-600' },
-    error:    { text: 'Error al guardar', cls: 'text-red-500' },
+    pending:       { text: 'Sin guardar…',                       cls: 'text-stone-400' },
+    saving:        { text: 'Guardando…',                         cls: 'text-amber-500' },
+    saved:         { text: 'Guardado ✓',                         cls: 'text-emerald-600' },
+    error:         { text: 'Sin conexión, reintentando…',        cls: 'text-red-500' },
+    reintentando:  { text: 'Guardando…',                         cls: 'text-amber-500' },
   };
   const { text, cls } = map[status] || {};
   return <span className={`text-xs font-medium ${cls}`}>{text}</span>;
