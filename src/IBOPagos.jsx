@@ -2213,7 +2213,9 @@ function AlumnosTab({ data, update }) {
     if (alumno.id) {
       update({ alumnos: data.alumnos.map(a => a.id === alumno.id ? alumno : a) });
     } else {
-      update({ alumnos: [...data.alumnos, { ...alumno, id: uid() }] });
+      // Fecha y hora en que se cargó el alumno en el sistema (distinto de
+      // "fecha de alta", que es un dato de negocio editable manualmente)
+      update({ alumnos: [...data.alumnos, { ...alumno, id: uid(), creadoEn: today(), creadoHora: horaActual() }] });
     }
     setEditing(null);
   };
@@ -2784,6 +2786,11 @@ function AlumnoForm({ alumno, data, update, onSave, onClose }) {
           <button onClick={onClose} className="text-stone-400 hover:text-stone-700"><X size={20} /></button>
         </div>
         <div className="p-6 space-y-4">
+          {alumno?.creadoEn && (
+            <p className="text-xs text-stone-400">
+              Cargado en el sistema el {new Date(alumno.creadoEn + 'T00:00:00').toLocaleDateString('es-AR')}{alumno.creadoHora ? ` a las ${alumno.creadoHora}hs` : ''}
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <Field label="Nombre" value={form.nombre} onChange={v => set('nombre', v)} />
             <Field label="Apellido" value={form.apellido} onChange={v => set('apellido', v)} />
