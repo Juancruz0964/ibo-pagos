@@ -426,6 +426,19 @@ export default function App() {
     return () => { clearTimeout(saveTimer.current); clearTimeout(retryTimer.current); };
   }, [data, loaded]);
 
+  // Avisar antes de cerrar/recargar la pestaña si hay algo sin guardar
+  // todavía (evita perder un cobro por cerrar demasiado rápido)
+  useEffect(() => {
+    const sinGuardar = saveStatus !== 'idle' && saveStatus !== 'saved';
+    if (!sinGuardar) return;
+    const handler = (e) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [saveStatus]);
+
   const update = (patch) => setData(d => ({ ...d, ...patch }));
 
   if (!loaded) {
