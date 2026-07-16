@@ -104,7 +104,6 @@ function loadData(ss) {
 function saveData(ss, data) {
   var sheet = ss.getSheetByName(SHEET_NAME);
   if (!sheet) sheet = ss.insertSheet(SHEET_NAME);
-  sheet.clearContents();
 
   var rows = [];
   var simpleKeys = ['cursos', 'configuracion', 'gruposFamiliares', 'promociones', 'alumnosParticulares'];
@@ -125,7 +124,7 @@ function saveData(ss, data) {
     }
   });
 
-  sheet.getRange(1, 1, rows.length, 2).setValues(rows);
+  escribirSoloCambios(sheet, rows, 2);
 
   // Actualizar pestañas legibles de cada curso
   try {
@@ -133,6 +132,30 @@ function saveData(ss, data) {
   } catch (err) {
     // No fallar el guardado si la sincronización de pestañas falla
     console.log('Error sincronizando pestañas: ' + err.toString());
+  }
+}
+
+// Escribe solo las celdas que efectivamente cambiaron respecto de lo que ya
+// había en la hoja (comparando fila por fila y columna por columna), en vez
+// de borrar todo y reescribirlo de cero. Esto hace que el historial de
+// versiones de Google Sheets solo registre lo que realmente cambió en cada
+// guardado, en vez de mostrar "toda la hoja distinta" cada vez.
+function escribirSoloCambios(sheet, filas, numCols) {
+  var lastRow = sheet.getLastRow();
+  var oldValues = lastRow > 0 ? sheet.getRange(1, 1, lastRow, numCols).getValues() : [];
+  var vacia = new Array(numCols).fill('');
+  var maxRows = Math.max(oldValues.length, filas.length);
+
+  for (var i = 0; i < maxRows; i++) {
+    var nueva = i < filas.length ? filas[i] : vacia;
+    var vieja = i < oldValues.length ? oldValues[i] : vacia;
+    var distinta = false;
+    for (var c = 0; c < numCols; c++) {
+      if (String(vieja[c]) !== String(nueva[c])) { distinta = true; break; }
+    }
+    if (distinta) {
+      sheet.getRange(i + 1, 1, 1, numCols).setValues([nueva]);
+    }
   }
 }
 
@@ -241,10 +264,7 @@ function sincronizarPestanas(ss, data) {
       filas.push(fila);
     });
 
-    hoja.clearContents();
-    if (filas.length > 0) {
-      hoja.getRange(1, 1, filas.length, HEADERS_CURSO.length).setValues(filas);
-    }
+    escribirSoloCambios(hoja, filas, HEADERS_CURSO.length);
   });
 }
 
