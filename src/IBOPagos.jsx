@@ -120,6 +120,9 @@ const initialState = {
 // ============================================================
 const fmtMoney = (n) => '$' + Math.round(n).toLocaleString('es-AR');
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+// En los mensajes de WhatsApp el mes/período va en minúscula (más natural en
+// una oración); en el resto de la app (títulos, listas) se deja tal cual.
+const mesTexto = (periodo) => periodo.full.toLowerCase();
 const today = () => new Date().toISOString().split('T')[0];
 // Hora local (HH:MM) al momento de cobrar, para saber cuándo exactamente se registró un pago
 const horaActual = () => {
@@ -1294,20 +1297,35 @@ function CalcularImporteModal({ data, update, selectedPeriodos, onClose }) {
   const gruposArr = Object.values(grupos);
 
   const generarMensaje = (g) => {
-    const periodosTxt = [...new Set(g.lineas.map(l => l.periodo.full))].join(', ');
+    const periodosTxt = [...new Set(g.lineas.map(l => mesTexto(l.periodo)))].join(', ');
     // Si son varios períodos distintos hay que aclarar cuál es cuál; si es
     // uno solo (el caso común, hermanos pagando el mismo mes) alcanza con
     // el nombre del alumno en cada línea.
     const periodosUnicos = new Set(g.lineas.map(l => l.periodo.id)).size;
     const lineLabel = (l) => {
-      if (l.esSaldo) return `${l.alumno.nombre} (saldo ${l.periodo.full})`;
-      return periodosUnicos > 1 ? `${l.alumno.nombre} (${l.periodo.full})` : l.alumno.nombre;
+      if (l.esSaldo) return `${l.alumno.nombre} (saldo ${mesTexto(l.periodo)})`;
+      return periodosUnicos > 1 ? `${l.alumno.nombre} (${mesTexto(l.periodo)})` : l.alumno.nombre;
     };
-    const detalleTransferencia = g.lineas.map(l => `${lineLabel(l)}: ${fmtMoney(l.calc.transferencia)}`).join('\n');
-    const detalleEfectivo = g.lineas.map(l => `${lineLabel(l)}: ${fmtMoney(l.calc.efectivo)}`).join('\n');
     // Si dos hermanos comparten el mismo celular y el mismo contacto (padre/
     // madre/tutor), no repetir su nombre dos veces en el saludo.
     const nombreContacto = [...new Set(g.alumnos.map(a => a.contactoNombre || a.nombre))].join(' y ');
+
+    // Caso simple: un solo alumno y una sola cuota (lo más común). No hace
+    // falta repetir su nombre en el detalle ni aclarar el total aparte,
+    // porque el detalle ya es el total.
+    if (g.lineas.length === 1 && !g.lineas[0].esSaldo) {
+      const simpleTemplate = cfg.plantillaWhatsAppCotizacionSimple ||
+        'Hola, {nombre}! El importe de {periodos} es:\n*Por transferencia*: {totalTransferencia}\n*En efectivo*: {total}';
+      return simpleTemplate
+        .replace('{nombre}', nombreContacto)
+        .replace('{periodos}', periodosTxt)
+        .replace('{instituto}', cfg.nombreInstituto)
+        .replace('{totalTransferencia}', fmtMoney(g.totalTransferencia))
+        .replace('{total}', fmtMoney(g.totalEfectivo));
+    }
+
+    const detalleTransferencia = g.lineas.map(l => `${lineLabel(l)}: ${fmtMoney(l.calc.transferencia)}`).join('\n');
+    const detalleEfectivo = g.lineas.map(l => `${lineLabel(l)}: ${fmtMoney(l.calc.efectivo)}`).join('\n');
     const defaultTemplate = 'Hola, {nombre}! El importe de {periodos} es:\n*Por transferencia*\n{detalleTransferencia}\n*Total: {totalTransferencia}*\n\n*En efectivo*\n{detalleEfectivo}\n*Total: {total}*';
     // Si la plantilla guardada es la vieja (usa la variable {detalle}, que ya
     // no existe), se usa la nueva por defecto en su lugar.
@@ -1615,7 +1633,7 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
     const partes = [];
 
     if (totalesItems.length > 0) {
-      const periodos = totalesItems.map(it => it.periodo.full).join(', ');
+      const periodos = totalesItems.map(it => mesTexto(it.periodo)).join(', ');
       const totalMonto = totalesItems.reduce((s, it) => s + it.monto, 0);
       let mensaje = replaceVars(cfg.plantillaWhatsApp, {
         nombre: alumno.contactoNombre || alumno.nombre,
@@ -1635,7 +1653,7 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
       partes.push(replaceVars(cfg.plantillaWhatsAppParcial || 'Hola {nombre}! Recibimos un pago parcial de {monto} ({medio}) para la cuota de {periodo} en {instituto}. Saldo pendiente: {saldo}. ¡Gracias!', {
         nombre: alumno.contactoNombre || alumno.nombre,
         monto: fmtMoney(it.monto),
-        periodo: it.periodo.full,
+        periodo: mesTexto(it.periodo),
         instituto: inst,
         saldo: fmtMoney(it.saldoRestante),
         medio
@@ -1646,7 +1664,7 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
       partes.push(replaceVars(cfg.plantillaWhatsAppSaldo || 'Hola {nombre}! Confirmamos el pago del saldo pendiente de {periodo} ({monto} en {medio}) en {instituto}. ¡Cuota saldada!', {
         nombre: alumno.contactoNombre || alumno.nombre,
         monto: fmtMoney(it.monto),
-        periodo: it.periodo.full,
+        periodo: mesTexto(it.periodo),
         instituto: inst,
         medio
       }));
@@ -1659,9 +1677,9 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
     const detalle = alumnos.map(a => {
       const itemsAlumno = items.filter(it => it.alumnoNombre === a.nombre);
       return itemsAlumno.map(it => {
-        if (it.modalidad === 'parcial') return `• ${a.nombre}: pago parcial de ${it.periodo.full} (${fmtMoney(it.monto)}, saldo pendiente: ${fmtMoney(it.saldoRestante)})`;
-        if (it.modalidad === 'saldo') return `• ${a.nombre}: saldo de ${it.periodo.full} (${fmtMoney(it.monto)}) — cuota saldada ✓`;
-        return `• ${a.nombre}: ${it.periodo.full} (${fmtMoney(it.monto)})`;
+        if (it.modalidad === 'parcial') return `• ${a.nombre}: pago parcial de ${mesTexto(it.periodo)} (${fmtMoney(it.monto)}, saldo pendiente: ${fmtMoney(it.saldoRestante)})`;
+        if (it.modalidad === 'saldo') return `• ${a.nombre}: saldo de ${mesTexto(it.periodo)} (${fmtMoney(it.monto)}) — cuota saldada ✓`;
+        return `• ${a.nombre}: ${mesTexto(it.periodo)} (${fmtMoney(it.monto)})`;
       }).join('\n');
     }).join('\n');
     const medio = formatMediosStr(items, usaMixtoLocal, distrLocal);
