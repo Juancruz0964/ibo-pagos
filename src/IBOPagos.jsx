@@ -424,7 +424,7 @@ export default function App() {
         const fresca = aplicarMigraciones(saved);
         setData(actual => JSON.stringify(actual) === JSON.stringify(fresca) ? actual : fresca);
       });
-    }, 60000);
+    }, 15000);
     return () => clearInterval(intervalo);
   }, [loaded]);
 
