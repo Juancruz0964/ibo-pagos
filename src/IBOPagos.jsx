@@ -250,16 +250,19 @@ const calcularCuota = (alumno, periodoId, anio, ctx) => {
   let efectivoBase = precio.efectivo;
   let transferenciaBase = precio.transferencia;
 
-  // Determinar etapa del pago
-  let etapa, recargoPct = 0;
-  if (hoy <= dia15) {
-    etapa = 'Primera quincena';
-  } else if (hoy <= fechaFinPeriodo) {
-    etapa = 'Segunda quincena';
-    recargoPct = configuracion.recargoSegundaQuincenaPorcentaje;
-  } else {
-    etapa = 'Mes vencido';
-    recargoPct = configuracion.recargoMesVencidoPorcentaje;
+  // Determinar etapa del pago (la matrícula no tiene recargo por pagarla
+  // "tarde": no es una cuota con vencimiento mensual)
+  let etapa = null, recargoPct = 0;
+  if (periodo.tipo !== 'INSCRIPCION') {
+    if (hoy <= dia15) {
+      etapa = 'Primera quincena';
+    } else if (hoy <= fechaFinPeriodo) {
+      etapa = 'Segunda quincena';
+      recargoPct = configuracion.recargoSegundaQuincenaPorcentaje;
+    } else {
+      etapa = 'Mes vencido';
+      recargoPct = configuracion.recargoMesVencidoPorcentaje;
+    }
   }
 
   // Exención de recargo individual (alumno avisó que paga tarde)
@@ -1964,7 +1967,7 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
                   <div className="flex items-center justify-between mb-2">
                     <div>
                       <div className="font-medium text-sm">{fullName(l.alumno)}</div>
-                      <div className="text-xs text-stone-500">{l.periodo.full} · {l.calc.etapa}</div>
+                      <div className="text-xs text-stone-500">{l.periodo.full}{l.calc.etapa ? ` · ${l.calc.etapa}` : ''}</div>
                     </div>
                     <div className="text-xs text-stone-400">
                       {l.calc.recargoPct > 0 && <span>+{l.calc.recargoPct}% recargo · </span>}
