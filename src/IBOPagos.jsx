@@ -394,19 +394,39 @@ export default function App() {
   const [saveStatus, setSaveStatus] = useState('idle'); // 'idle' | 'pending' | 'saving' | 'saved' | 'error'
   const saveTimer = useRef(null);
   const retryTimer = useRef(null);
+  const saveStatusRef = useRef(saveStatus);
+  useEffect(() => { saveStatusRef.current = saveStatus; }, [saveStatus]);
+
+  // Migración: los cursos guardados sin mesesExcluidos pasan a tener la lista vacía
+  const aplicarMigraciones = (saved) => {
+    const cursosActualizados = (saved.cursos || []).map(c =>
+      c.mesesExcluidos ? c : { ...c, mesesExcluidos: [] }
+    );
+    return { ...initialState, ...saved, cursos: cursosActualizados };
+  };
 
   useEffect(() => {
     storage.get('ibo_data').then(saved => {
-      if (saved) {
-        // Migración: los cursos guardados sin mesesExcluidos pasan a tener la lista vacía
-        const cursosActualizados = (saved.cursos || []).map(c =>
-          c.mesesExcluidos ? c : { ...c, mesesExcluidos: [] }
-        );
-        setData({ ...initialState, ...saved, cursos: cursosActualizados });
-      }
+      if (saved) setData(aplicarMigraciones(saved));
       setLoaded(true);
     });
   }, []);
+
+  // Traer datos frescos cada un rato (por si se cobró algo desde otra PC/
+  // sesión): solo cuando no hay nada propio sin guardar todavía, para no
+  // pisar un cambio que se está por guardar acá.
+  useEffect(() => {
+    if (!loaded) return;
+    const intervalo = setInterval(() => {
+      if (saveStatusRef.current !== 'idle') return;
+      storage.get('ibo_data').then(saved => {
+        if (!saved) return;
+        const fresca = aplicarMigraciones(saved);
+        setData(actual => JSON.stringify(actual) === JSON.stringify(fresca) ? actual : fresca);
+      });
+    }, 60000);
+    return () => clearInterval(intervalo);
+  }, [loaded]);
 
   useEffect(() => {
     if (!loaded) return;
