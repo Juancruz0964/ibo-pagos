@@ -4909,7 +4909,7 @@ function DeudoresView({ data, update }) {
   const generarMensaje = (alumno) =>
     plantilla
       .replace('{nombre}', alumno.contactoNombre || alumno.nombre)
-      .replace('{mes}', periodoObj?.full || '')
+      .replace('{mes}', periodoObj ? mesTexto(periodoObj) : '')
       .replace('{instituto}', data.configuracion.nombreInstituto);
 
   const guardarContacto = (alumnoId, nombreContacto) => {
@@ -4937,7 +4937,7 @@ function DeudoresView({ data, update }) {
               onChange={e => { setPeriodo(e.target.value); setEnviados(new Set()); setCursoFiltro('todos'); }}
               className="px-3 py-2 rounded-lg border border-stone-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
             >
-              {mensualPeriodos.map(p => <option key={p.id} value={p.id}>{p.full}</option>)}
+              {PERIODOS.map(p => <option key={p.id} value={p.id}>{p.full}</option>)}
             </select>
             <select
               value={anio}
