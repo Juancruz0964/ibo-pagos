@@ -421,6 +421,10 @@ export default function App() {
       if (saveStatusRef.current !== 'idle') return;
       storage.get('ibo_data').then(saved => {
         if (!saved) return;
+        // Si mientras se pedían los datos se hizo un cambio local (ej: se
+        // cobró algo), esta respuesta ya quedó vieja — se descarta en vez de
+        // pisar el cambio recién hecho.
+        if (saveStatusRef.current !== 'idle') return;
         const fresca = aplicarMigraciones(saved);
         setData(actual => JSON.stringify(actual) === JSON.stringify(fresca) ? actual : fresca);
       });
