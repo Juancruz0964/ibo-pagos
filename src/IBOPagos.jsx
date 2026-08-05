@@ -1324,14 +1324,6 @@ function CalcularImporteModal({ data, update, selectedPeriodos, onClose }) {
 
   const generarMensaje = (g) => {
     const periodosTxt = [...new Set(g.lineas.map(l => mesTexto(l.periodo)))].join(', ');
-    // Si son varios períodos distintos hay que aclarar cuál es cuál; si es
-    // uno solo (el caso común, hermanos pagando el mismo mes) alcanza con
-    // el nombre del alumno en cada línea.
-    const periodosUnicos = new Set(g.lineas.map(l => l.periodo.id)).size;
-    const lineLabel = (l) => {
-      if (l.esSaldo) return `${l.alumno.nombre} (saldo ${mesTexto(l.periodo)})`;
-      return periodosUnicos > 1 ? `${l.alumno.nombre} (${mesTexto(l.periodo)})` : l.alumno.nombre;
-    };
     // Si dos hermanos comparten el mismo celular y el mismo contacto (padre/
     // madre/tutor), no repetir su nombre dos veces en el saludo.
     const nombreContacto = [...new Set(g.alumnos.map(a => a.contactoNombre || a.nombre))].join(' y ');
@@ -1350,8 +1342,21 @@ function CalcularImporteModal({ data, update, selectedPeriodos, onClose }) {
         .replace('{total}', fmtMoney(g.totalEfectivo));
     }
 
-    const detalleTransferencia = g.lineas.map(l => `${lineLabel(l)}: ${fmtMoney(l.calc.transferencia)}`).join('\n');
-    const detalleEfectivo = g.lineas.map(l => `${lineLabel(l)}: ${fmtMoney(l.calc.efectivo)}`).join('\n');
+    // Agrupado por alumno: el nombre una sola vez, y debajo cada período con
+    // su monto (el mes va con mayúscula acá, para que se lea como un título).
+    const detalleAgrupado = (metodo) => {
+      const orden = [];
+      const porAlumno = {};
+      g.lineas.forEach(l => {
+        const nombre = l.alumno.nombre;
+        if (!porAlumno[nombre]) { porAlumno[nombre] = []; orden.push(nombre); }
+        const label = l.esSaldo ? `Saldo ${l.periodo.full}` : l.periodo.full;
+        porAlumno[nombre].push(`- ${label}: ${fmtMoney(l.calc[metodo])}`);
+      });
+      return orden.map(nombre => `${nombre}\n${porAlumno[nombre].join('\n')}`).join('\n');
+    };
+    const detalleTransferencia = detalleAgrupado('transferencia');
+    const detalleEfectivo = detalleAgrupado('efectivo');
     const defaultTemplate = 'Hola, {nombre}! El importe de {periodos} es:\n*Por transferencia*\n{detalleTransferencia}\n*Total: {totalTransferencia}*\n\n*En efectivo*\n{detalleEfectivo}\n*Total: {total}*';
     // Si la plantilla guardada es la vieja (usa la variable {detalle}, que ya
     // no existe), se usa la nueva por defecto en su lugar.
