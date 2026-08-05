@@ -227,12 +227,17 @@ const calcularCuota = (alumno, periodoId, anio, ctx) => {
   const ultimoDia = new Date(anio, ref.mes, 0).getDate();
   const fechaFinPeriodo = `${anio}-${String(ref.mes).padStart(2, '0')}-${String(ultimoDia).padStart(2, '0')}`;
   const dia15 = `${anio}-${String(ref.mes).padStart(2, '0')}-15`;
+  const hoy = today();
 
   let precio;
   if (periodo.tipo === 'INSCRIPCION') {
-    // Matrícula: valor global desde configuración (con histórico de vigencias)
+    // Matrícula: valor global desde configuración (con histórico de vigencias).
+    // Se busca vigente a HOY (el día real en que se cobra), no según el "1° de
+    // febrero" de referencia del período — la inscripción se puede cobrar en
+    // cualquier momento del año y el precio vigente es el de hoy, no el que
+    // regía en febrero del año que se está inscribiendo.
     const matriculas = (configuracion.matriculas || [])
-      .filter(m => m.vigenciaDesde <= fechaInicioPeriodo)
+      .filter(m => m.vigenciaDesde <= hoy)
       .sort((a, b) => b.vigenciaDesde.localeCompare(a.vigenciaDesde));
     precio = matriculas[0];
     if (!precio) return { error: 'Sin matrícula configurada (Configuración → Matrícula)' };
@@ -242,8 +247,6 @@ const calcularCuota = (alumno, periodoId, anio, ctx) => {
     precio = buscarPrecioVigente(preciosCuotas, alumno.cursoId, 'MENSUAL', fechaInicioPeriodo);
     if (!precio) return { error: 'Sin precio configurado para este curso/periodo' };
   }
-
-  const hoy = today();
   let efectivoBase = precio.efectivo;
   let transferenciaBase = precio.transferencia;
 
