@@ -390,6 +390,11 @@ const obtenerEstadoCuota = (pagos, alumnoId, periodoId, anio) => {
 export default function App() {
   const [data, setData] = useState(initialState);
   const [loaded, setLoaded] = useState(false);
+  // Si el pedido inicial de datos falla o vuelve vacío, NO hay que asumir
+  // "instituto nuevo" y guardar el estado de ejemplo por encima de lo real:
+  // eso pisaría los datos verdaderos. Se bloquea el guardado hasta que se
+  // logre cargar algo real.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [tab, setTab] = useState('pagos');
   const [importMessage, setImportMessage] = useState(null);
   const [saveStatus, setSaveStatus] = useState('idle'); // 'idle' | 'pending' | 'saving' | 'saved' | 'error'
@@ -408,7 +413,12 @@ export default function App() {
 
   useEffect(() => {
     storage.get('ibo_data').then(saved => {
-      if (saved) setData(aplicarMigraciones(saved));
+      if (saved) {
+        setData(aplicarMigraciones(saved));
+        setLoadFailed(false);
+      } else {
+        setLoadFailed(true);
+      }
       setLoaded(true);
     });
   }, []);
@@ -427,6 +437,7 @@ export default function App() {
         // pisar el cambio recién hecho.
         if (saveStatusRef.current !== 'idle') return;
         const fresca = aplicarMigraciones(saved);
+        setLoadFailed(false); // si la carga inicial había fallado, esto la recupera
         setData(actual => JSON.stringify(actual) === JSON.stringify(fresca) ? actual : fresca);
       });
     }, 15000);
@@ -434,7 +445,10 @@ export default function App() {
   }, [loaded]);
 
   useEffect(() => {
-    if (!loaded) return;
+    // Si la carga inicial (o la más reciente) no trajo datos reales, no hay
+    // que guardar nada: guardar acá pisaría los datos verdaderos con el
+    // estado de ejemplo. Se espera a que una carga futura traiga algo real.
+    if (!loaded || loadFailed) return;
     setSaveStatus('pending');
     clearTimeout(saveTimer.current);
     clearTimeout(retryTimer.current);
@@ -458,7 +472,7 @@ export default function App() {
 
     saveTimer.current = setTimeout(() => intentarGuardar(0), GAS_URL ? 1500 : 0);
     return () => { clearTimeout(saveTimer.current); clearTimeout(retryTimer.current); };
-  }, [data, loaded]);
+  }, [data, loaded, loadFailed]);
 
   // Avisar antes de cerrar/recargar la pestaña si hay algo sin guardar
   // todavía (evita perder un cobro por cerrar demasiado rápido)
@@ -489,6 +503,35 @@ export default function App() {
             <div key={i} className="w-2 h-2 rounded-full bg-emerald-400"
               style={{ animation: `ibo-dot 1.4s ease-in-out ${i * 0.22}s infinite` }} />
           ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (loadFailed) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 font-body px-4" style={{
+        background: 'radial-gradient(ellipse at top, #fdf0f2 0%, #f7fbf7 40%, #f7fbf7 100%)'
+      }}>
+        <div className="max-w-md w-full bg-white rounded-2xl border border-cream-200 shadow-sm p-6 text-center space-y-3">
+          <div className="font-display text-2xl font-semibold italic text-navy-600">IBO</div>
+          <p className="text-sm text-cream-700">
+            No se pudieron cargar tus datos guardados en este momento. Para no arriesgar
+            pisarlos, la app no va a guardar nada hasta lograr cargarlos bien.
+          </p>
+          <p className="text-xs text-cream-500">
+            Tus datos reales siguen intactos en Google Sheets — esto es solo un problema
+            de conexión al abrir la app.
+          </p>
+          <button
+            onClick={() => { setLoaded(false); storage.get('ibo_data').then(saved => {
+              if (saved) { setData(aplicarMigraciones(saved)); setLoadFailed(false); }
+              setLoaded(true);
+            }); }}
+            className="w-full bg-gradient-to-b from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 shadow-md shadow-brand-600/25 text-white px-4 py-2.5 rounded-lg font-medium text-sm"
+          >
+            Reintentar
+          </button>
         </div>
       </div>
     );
