@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, Plus, X, Edit2, Trash2, Users, BookOpen, Settings, CreditCard,
   Check, MessageCircle, ChevronRight, Download, Upload, AlertCircle,
@@ -477,11 +478,11 @@ export default function App() {
   if (!loaded) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-6 font-body" style={{
-        background: 'radial-gradient(ellipse at top, #f0fdf4 0%, #fafaf9 40%, #fafaf9 100%)'
+        background: 'radial-gradient(ellipse at top, #fdf0f2 0%, #f7fbf7 40%, #f7fbf7 100%)'
       }}>
         <div className="text-center">
           <div className="font-display text-5xl font-semibold italic text-emerald-700 mb-1">IBO</div>
-          <div className="text-xs text-stone-400 tracking-[0.2em] uppercase">Sistema de pagos</div>
+          <div className="text-xs text-cream-400 tracking-[0.2em] uppercase">Sistema de pagos</div>
         </div>
         <div className="flex gap-2">
           {[0, 1, 2].map(i => (
@@ -500,8 +501,8 @@ export default function App() {
         .font-display { font-family: 'Fraunces', Georgia, serif; font-optical-sizing: auto; }
         .font-body { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
       `}</style>
-      <div className="min-h-screen text-stone-900 font-body" style={{
-        background: 'radial-gradient(ellipse at top, #f0fdf4 0%, #fafaf9 35%, #fafaf9 100%)'
+      <div className="min-h-screen text-cream-900 font-body" style={{
+        background: 'radial-gradient(ellipse at top, #fdf0f2 0%, #f7fbf7 35%, #f7fbf7 100%)'
       }}>
         <div className="max-w-5xl mx-auto px-4 py-8">
           <Header tab={tab} setTab={setTab} nombreInstituto={data.configuracion.nombreInstituto} saveStatus={saveStatus} />
@@ -531,7 +532,7 @@ export default function App() {
 function SaveIndicator({ status }) {
   if (status === 'idle') return null;
   const map = {
-    pending:       { text: 'Sin guardar…',                       cls: 'text-stone-400' },
+    pending:       { text: 'Sin guardar…',                       cls: 'text-cream-400' },
     saving:        { text: 'Guardando…',                         cls: 'text-amber-500' },
     saved:         { text: 'Guardado ✓',                         cls: 'text-emerald-600' },
     error:         { text: 'Sin conexión, reintentando…',        cls: 'text-red-500' },
@@ -550,21 +551,21 @@ function Header({ tab, setTab, nombreInstituto, saveStatus }) {
     { id: 'config', label: 'Configuración', icon: Settings }
   ];
   return (
-    <div className="bg-white/80 backdrop-blur rounded-2xl border border-stone-200/80 px-6 pt-6 pb-2 shadow-sm">
+    <div className="bg-white/80 backdrop-blur rounded-2xl border border-cream-200/80 px-6 pt-6 pb-2 shadow-sm">
       <div className="flex items-baseline justify-between mb-1">
         <h1 className="font-display text-3xl tracking-tight">
-          <span className="font-semibold italic text-emerald-800">{nombreInstituto}</span>
-          <span className="text-stone-300 mx-2 font-light">·</span>
-          <span className="text-stone-700 font-normal">{tabs.find(t => t.id === tab)?.label}</span>
+          <span className="font-semibold italic text-navy-600">{nombreInstituto}</span>
+          <span className="text-cream-300 mx-2 font-light">·</span>
+          <span className="text-cream-700 font-normal">{tabs.find(t => t.id === tab)?.label}</span>
         </h1>
         <div className="flex items-center gap-3">
           <SaveIndicator status={saveStatus} />
-          <div className="text-xs text-stone-400 hidden sm:block">
+          <div className="text-xs text-cream-400 hidden sm:block">
             {new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}
           </div>
         </div>
       </div>
-      <div className="flex gap-1 mt-5 border-b border-stone-200 -mx-6 px-6">
+      <div className="flex gap-1 mt-5 border-b border-cream-200 -mx-6 px-6">
         {tabs.map(t => {
           const Icon = t.icon;
           const active = tab === t.id;
@@ -574,8 +575,8 @@ function Header({ tab, setTab, nombreInstituto, saveStatus }) {
               onClick={() => setTab(t.id)}
               className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-all ${
                 active
-                  ? 'border-emerald-700 text-emerald-800'
-                  : 'border-transparent text-stone-500 hover:text-stone-800 hover:border-stone-300'
+                  ? 'border-brand-600 text-brand-600'
+                  : 'border-transparent text-mist-700 hover:text-navy-600 hover:border-mist-300'
               }`}
             >
               <Icon size={16} strokeWidth={active ? 2.25 : 1.75} />
@@ -733,15 +734,15 @@ function PagosTab({ data, update }) {
   if (multiMode) {
     return (
       <div className="space-y-4">
-        <div className="bg-white rounded-2xl border border-stone-200 p-6">
+        <div className="bg-white rounded-2xl border border-cream-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="font-semibold text-stone-900">Cobro a varios alumnos</h2>
-              <p className="text-sm text-stone-500 mt-0.5">Agregá los alumnos y seleccioná los meses a cobrar</p>
+              <h2 className="font-semibold text-cream-900">Cobro a varios alumnos</h2>
+              <p className="text-sm text-cream-500 mt-0.5">Agregá los alumnos y seleccioná los meses a cobrar</p>
             </div>
             <button
               onClick={() => { setMultiMode(false); setMultiAlumnos([]); setSelectedPeriodos([]); }}
-              className="text-sm text-stone-500 hover:text-stone-800 px-3 py-1.5 rounded-lg hover:bg-stone-100"
+              className="text-sm text-cream-500 hover:text-cream-800 px-3 py-1.5 rounded-lg hover:bg-cream-100"
             >
               ← Modo individual
             </button>
@@ -758,11 +759,11 @@ function PagosTab({ data, update }) {
 
         {multiAlumnos.length > 0 && (
           <div className="flex items-center gap-2 text-sm">
-            <span className="text-stone-500">Año:</span>
+            <span className="text-cream-500">Año:</span>
             <select
               value={anio}
               onChange={e => setAnio(Number(e.target.value))}
-              className="px-3 py-1.5 rounded-lg border border-stone-200 bg-white"
+              className="px-3 py-1.5 rounded-lg border border-cream-200 bg-white"
             >
               {[2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
             </select>
@@ -838,13 +839,13 @@ function PagosTab({ data, update }) {
   // ===== Individual mode =====
   return (
     <div className="space-y-4">
-      <div className="bg-white rounded-2xl border border-stone-200 p-6">
+      <div className="bg-white rounded-2xl border border-cream-200 p-6">
         {/* Sub-view toggle */}
-        <div className="flex gap-1 border-b border-stone-200 -mx-6 px-6 mb-4">
+        <div className="flex gap-1 border-b border-cream-200 -mx-6 px-6 mb-4">
           <button
             onClick={() => setSubView('cobrar')}
             className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-all ${
-              subView === 'cobrar' ? 'border-emerald-700 text-emerald-800' : 'border-transparent text-stone-500 hover:text-stone-800'
+              subView === 'cobrar' ? 'border-brand-600 text-brand-600' : 'border-transparent text-cream-500 hover:text-cream-800'
             }`}
           >
             Cobrar
@@ -852,7 +853,7 @@ function PagosTab({ data, update }) {
           <button
             onClick={() => setSubView('deudores')}
             className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-all ${
-              subView === 'deudores' ? 'border-emerald-700 text-emerald-800' : 'border-transparent text-stone-500 hover:text-stone-800'
+              subView === 'deudores' ? 'border-brand-600 text-brand-600' : 'border-transparent text-cream-500 hover:text-cream-800'
             }`}
           >
             Ver deudores
@@ -884,11 +885,11 @@ function PagosTab({ data, update }) {
       {subView === 'cobrar' && alumno && curso && (
         <>
           <div className="flex items-center gap-3 px-1">
-            <span className="text-xs uppercase tracking-wider text-stone-500">Año:</span>
+            <span className="text-xs uppercase tracking-wider text-cream-500">Año:</span>
             <select
               value={anio}
               onChange={e => { setAnio(Number(e.target.value)); setSelectedPeriodos([]); }}
-              className="px-3 py-1.5 rounded-lg border border-stone-200 bg-white text-sm"
+              className="px-3 py-1.5 rounded-lg border border-cream-200 bg-white text-sm"
             >
               {[2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
             </select>
@@ -909,7 +910,7 @@ function PagosTab({ data, update }) {
       )}
 
       {subView === 'cobrar' && !alumno && !query && (
-        <div className="bg-white rounded-2xl border border-stone-200 p-12 text-center text-stone-400">
+        <div className="bg-white rounded-2xl border border-cream-200 p-12 text-center text-cream-400">
           <Search size={32} className="mx-auto mb-3 opacity-40" />
           <p className="text-sm">Buscá un alumno para comenzar</p>
         </div>
@@ -974,20 +975,20 @@ function PagoDetalleModal({ alumno, periodo, anio, estadoCuota, onClose, onDelet
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 overflow-y-auto">
       <div className="bg-white rounded-2xl max-w-md w-full my-8 max-h-[90vh] overflow-y-auto">
-        <div className="border-b border-stone-200 px-6 py-4 flex items-center justify-between sticky top-0 bg-white">
+        <div className="border-b border-cream-200 px-6 py-4 flex items-center justify-between sticky top-0 bg-white">
           <h2 className="font-semibold">Detalle de la cuota</h2>
-          <button onClick={onClose} className="text-stone-400 hover:text-stone-700"><X size={20} /></button>
+          <button onClick={onClose} className="text-cream-400 hover:text-cream-700"><X size={20} /></button>
         </div>
 
         <div className="p-6 space-y-4">
-          <div className="flex items-center gap-3 pb-4 border-b border-stone-100">
+          <div className="flex items-center gap-3 pb-4 border-b border-cream-100">
             <Avatar alumno={alumno} size="lg" />
             <div className="flex-1">
               <div className="font-semibold">{fullName(alumno)}</div>
-              <div className="text-sm text-stone-500">{periodo.full}</div>
+              <div className="text-sm text-cream-500">{periodo.full}</div>
             </div>
             <div className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
-              esParcial ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+              esParcial ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-700'
             }`}>
               {esParcial ? 'PARCIAL' : 'PAGADO'}
             </div>
@@ -996,11 +997,11 @@ function PagoDetalleModal({ alumno, periodo, anio, estadoCuota, onClose, onDelet
           {/* Resumen de saldo */}
           <div className={`rounded-xl p-4 space-y-1.5 ${esParcial ? 'bg-amber-50 border border-amber-200' : 'bg-emerald-50/60 border border-emerald-200'}`}>
             <div className="flex justify-between text-sm">
-              <span className="text-stone-600">Total de la cuota</span>
+              <span className="text-cream-600">Total de la cuota</span>
               <span className="font-semibold">{fmtMoney(estadoCuota.precioFijado)}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-stone-600">Cobrado</span>
+              <span className="text-cream-600">Cobrado</span>
               <span className="font-semibold">{fmtMoney(estadoCuota.cobrado)}</span>
             </div>
             {esParcial && (
@@ -1013,7 +1014,7 @@ function PagoDetalleModal({ alumno, periodo, anio, estadoCuota, onClose, onDelet
 
           {/* Lista de pagos */}
           <div>
-            <div className="text-xs uppercase tracking-wider text-stone-500 font-medium mb-2">
+            <div className="text-xs uppercase tracking-wider text-cream-500 font-medium mb-2">
               Pagos registrados ({estadoCuota.pagos.length})
             </div>
             <div className="space-y-2">
@@ -1021,11 +1022,11 @@ function PagoDetalleModal({ alumno, periodo, anio, estadoCuota, onClose, onDelet
                 const monto = pago.montoCobrado != null ? pago.montoCobrado : (pago.montoTotal || 0);
                 const confirmando = confirmandoIdx === pago.id;
                 return (
-                  <div key={pago.id} className="border border-stone-200 rounded-lg p-3">
+                  <div key={pago.id} className="border border-cream-200 rounded-lg p-3">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium">{fmtMoney(monto)}</div>
-                        <div className="text-xs text-stone-500">
+                        <div className="text-xs text-cream-500">
                           {fmtFecha(pago.fechaPago)}{pago.horaPago ? ` ${pago.horaPago}hs` : ''} · {pago.metodo === 'transferencia' ? 'Transferencia/MP' : 'Efectivo'}
                           {idx === 0 && estadoCuota.pagos.length > 1 ? ' · 1° pago' : ''}
                         </div>
@@ -1033,7 +1034,7 @@ function PagoDetalleModal({ alumno, periodo, anio, estadoCuota, onClose, onDelet
                       {!confirmando && (
                         <button
                           onClick={() => setConfirmandoIdx(pago.id)}
-                          className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                          className="p-1.5 text-cream-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
                           title="Eliminar este pago"
                         >
                           <Trash2 size={14} />
@@ -1041,7 +1042,7 @@ function PagoDetalleModal({ alumno, periodo, anio, estadoCuota, onClose, onDelet
                       )}
                     </div>
                     {confirmando && (
-                      <div className="mt-2 pt-2 border-t border-stone-100 bg-red-50 -m-3 mt-2 p-3 rounded-b-lg">
+                      <div className="mt-2 pt-2 border-t border-cream-100 bg-red-50 -m-3 mt-2 p-3 rounded-b-lg">
                         <div className="text-xs text-red-800 mb-2">¿Eliminar este pago?</div>
                         <div className="flex gap-2">
                           <button onClick={() => setConfirmandoIdx(null)} className="flex-1 px-3 py-1.5 rounded text-xs border border-red-200 bg-white">Cancelar</button>
@@ -1056,14 +1057,14 @@ function PagoDetalleModal({ alumno, periodo, anio, estadoCuota, onClose, onDelet
           </div>
 
           {/* Acciones */}
-          <div className="flex gap-2 pt-4 border-t border-stone-200">
-            <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-lg border border-stone-200 hover:bg-stone-50 font-medium text-sm">
+          <div className="flex gap-2 pt-4 border-t border-cream-200">
+            <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-lg border border-cream-200 hover:bg-cream-50 font-medium text-sm">
               Cerrar
             </button>
             {esParcial && onCobrarSaldo && (
               <button
                 onClick={() => onCobrarSaldo(estadoCuota.saldo)}
-                className="flex-1 px-4 py-2.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-medium text-sm flex items-center justify-center gap-2"
+                className="flex-1 px-4 py-2.5 rounded-lg bg-gradient-to-b from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 shadow-md shadow-brand-600/25 text-white font-medium text-sm flex items-center justify-center gap-2"
               >
                 <DollarSign size={14} />
                 Cobrar saldo
@@ -1083,27 +1084,27 @@ function SearchBox({ query, setQuery, placeholder, resultados, onSelect, classNa
   return (
     <div className={`relative ${className}`}>
       <div className="relative">
-        <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400" />
+        <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-cream-400" />
         <input
           type="text"
           value={query}
           onChange={e => setQuery(e.target.value)}
           placeholder={placeholder}
-          className="w-full pl-11 pr-4 py-3 rounded-xl border border-stone-200 bg-white text-stone-900 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+          className="w-full pl-11 pr-4 py-3 rounded-xl border border-cream-200 bg-white text-cream-900 placeholder:text-cream-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
         />
       </div>
       {resultados.length > 0 && (
-        <div className="absolute z-10 left-0 right-0 mt-1 bg-white border border-stone-200 rounded-xl shadow-lg overflow-hidden">
+        <div className="absolute z-10 left-0 right-0 mt-1 bg-white border border-cream-200 rounded-xl shadow-lg overflow-hidden">
           {resultados.map(a => (
             <button
               key={a.id}
               onClick={() => onSelect(a)}
-              className="w-full text-left px-4 py-2.5 hover:bg-stone-50 flex items-center gap-3 border-b border-stone-100 last:border-0"
+              className="w-full text-left px-4 py-2.5 hover:bg-cream-50 flex items-center gap-3 border-b border-cream-100 last:border-0"
             >
               <Avatar alumno={a} size="sm" />
               <div>
-                <div className="text-sm font-medium text-stone-900">{fullName(a)}</div>
-                <div className="text-xs text-stone-500">DNI {a.dni}</div>
+                <div className="text-sm font-medium text-cream-900">{fullName(a)}</div>
+                <div className="text-xs text-cream-500">DNI {a.dni}</div>
               </div>
             </button>
           ))}
@@ -1132,33 +1133,33 @@ function AlumnoPagoCard({ alumno, curso, data, update, anio, isSelected, toggleP
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-stone-200 shadow-sm hover:shadow-md transition-shadow duration-200 p-5">
+    <div className="bg-white rounded-2xl border border-cream-200 shadow-sm hover:shadow-md transition-shadow duration-200 p-5">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <Avatar alumno={alumno} size="lg" />
           <div>
-            <div className="font-semibold text-stone-900">{fullName(alumno)}</div>
-            <div className="text-sm text-stone-500">{curso?.nombre || 'Sin curso'}</div>
+            <div className="font-semibold text-cream-900">{fullName(alumno)}</div>
+            <div className="text-sm text-cream-500">{curso?.nombre || 'Sin curso'}</div>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${
-            todosPagados ? 'bg-emerald-100 text-emerald-700' : pagados > 0 ? 'bg-stone-100 text-stone-600' : 'bg-stone-100 text-stone-400'
+            todosPagados ? 'bg-emerald-100 text-emerald-700' : pagados > 0 ? 'bg-cream-100 text-cream-600' : 'bg-cream-100 text-cream-400'
           }`}>
             {pagados}/{total} pagados
           </span>
           {onEdit && (
-            <button onClick={onEdit} className="text-sm text-stone-500 hover:text-stone-800 px-3 py-1.5 rounded-lg border border-stone-200 hover:bg-stone-50 flex items-center gap-1.5">
+            <button onClick={onEdit} className="text-sm text-cream-500 hover:text-cream-800 px-3 py-1.5 rounded-lg border border-cream-200 hover:bg-cream-50 flex items-center gap-1.5">
               <Edit2 size={14} /> Editar
             </button>
           )}
           {onChange && (
-            <button onClick={onChange} className="text-sm text-stone-500 hover:text-stone-800 px-3 py-1.5 rounded-lg border border-stone-200 hover:bg-stone-50">
+            <button onClick={onChange} className="text-sm text-cream-500 hover:text-cream-800 px-3 py-1.5 rounded-lg border border-cream-200 hover:bg-cream-50">
               Cambiar
             </button>
           )}
           {showRemove && (
-            <button onClick={onRemove} className="text-stone-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50">
+            <button onClick={onRemove} className="text-cream-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50">
               <X size={18} />
             </button>
           )}
@@ -1173,7 +1174,7 @@ function AlumnoPagoCard({ alumno, curso, data, update, anio, isSelected, toggleP
               <div
                 key={p.id}
                 title={`${p.full} — no aplica para este curso`}
-                className="flex flex-col items-center justify-center py-3 rounded-xl border border-stone-100 text-[11px] font-medium text-stone-300 bg-stone-50/60 cursor-default select-none"
+                className="flex flex-col items-center justify-center py-3 rounded-xl border border-cream-100 text-[11px] font-medium text-cream-300 bg-cream-50/60 cursor-default select-none"
               >
                 {p.label}
               </div>
@@ -1186,7 +1187,7 @@ function AlumnoPagoCard({ alumno, curso, data, update, anio, isSelected, toggleP
                 key={p.id}
                 onClick={() => update && confirm(`¿Reactivar ${p.full} para ${alumno.nombre}? Volverá a figurar como pendiente.`) && toggleAnulada(p.id)}
                 title={`${p.full} — no corresponde (click para reactivar)`}
-                className="flex flex-col items-center justify-center py-3 rounded-xl border border-dashed border-stone-200 text-[11px] font-semibold tracking-wide text-stone-400 bg-stone-50/60 hover:bg-stone-100"
+                className="flex flex-col items-center justify-center py-3 rounded-xl border border-dashed border-cream-200 text-[11px] font-semibold tracking-wide text-cream-400 bg-cream-50/60 hover:bg-cream-100"
               >
                 <span>{p.label}</span>
                 <span className="text-[9px] font-normal">N/A</span>
@@ -1198,8 +1199,9 @@ function AlumnoPagoCard({ alumno, curso, data, update, anio, isSelected, toggleP
           const seleccionado = isSelected(p.id);
           const esPagadoOParcial = estado === 'pagado' || estado === 'parcial';
           return (
-            <button
+            <motion.button
               key={p.id}
+              whileTap={{ scale: 0.94 }}
               onClick={() => esPagadoOParcial ? (onVerPago && onVerPago(p.id)) : togglePeriodo(p.id)}
               title={
                 estado === 'pagado' ? `${p.full} — pagado (click para ver)` :
@@ -1213,11 +1215,21 @@ function AlumnoPagoCard({ alumno, curso, data, update, anio, isSelected, toggleP
                     ? 'bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100 hover:-translate-y-0.5 overflow-hidden'
                     : seleccionado
                       ? 'bg-emerald-50 text-emerald-700 border-emerald-400 ring-2 ring-emerald-200 ring-offset-1'
-                      : 'bg-stone-50/50 text-stone-500 border-stone-200 hover:bg-emerald-50/70 hover:border-emerald-300 hover:text-emerald-700 hover:shadow-sm'
+                      : 'bg-cream-50/50 text-cream-500 border-cream-200 hover:bg-emerald-50/70 hover:border-emerald-300 hover:text-emerald-700 hover:shadow-sm'
               }`}
             >
               {estado === 'pagado'
-                ? <><Check size={11} className="mb-0.5 opacity-90" /><span>{p.label}</span></>
+                ? <>
+                    <motion.span
+                      initial={{ scale: 0, rotate: -45 }}
+                      animate={{ scale: 1, rotate: 0 }}
+                      transition={{ type: 'spring', stiffness: 500, damping: 20 }}
+                      className="mb-0.5"
+                    >
+                      <Check size={11} className="opacity-90" />
+                    </motion.span>
+                    <span>{p.label}</span>
+                  </>
                 : <span>{p.label}</span>
               }
               {estado === 'parcial' && (
@@ -1233,22 +1245,22 @@ function AlumnoPagoCard({ alumno, curso, data, update, anio, isSelected, toggleP
                       toggleAnulada(p.id);
                     }
                   }}
-                  className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-white border border-stone-300 text-stone-400 flex items-center justify-center opacity-60 hover:opacity-100 hover:text-red-500 hover:border-red-300"
+                  className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-white border border-cream-300 text-cream-400 flex items-center justify-center opacity-60 hover:opacity-100 hover:text-red-500 hover:border-red-300"
                 >
                   <Ban size={10} />
                 </span>
               )}
-            </button>
+            </motion.button>
           );
         })}
       </div>
       {update && (
-        <p className="text-[11px] text-stone-400 -mt-2 mb-3">El ⊘ en la esquina de una cuota pendiente la marca como "no corresponde".</p>
+        <p className="text-[11px] text-cream-400 -mt-2 mb-3">El ⊘ en la esquina de una cuota pendiente la marca como "no corresponde".</p>
       )}
 
       {total > 0 && (
         <div>
-          <div className="flex justify-between text-xs text-stone-400 mb-1.5">
+          <div className="flex justify-between text-xs text-cream-400 mb-1.5">
             <span>
               {pagados > 0 && `${pagados} pagado${pagados !== 1 ? 's' : ''}`}
               {parciales > 0 && `${pagados > 0 ? ' · ' : ''}${parciales} parcial${parciales !== 1 ? 'es' : ''}`}
@@ -1256,7 +1268,7 @@ function AlumnoPagoCard({ alumno, curso, data, update, anio, isSelected, toggleP
             </span>
             <span>{total - pagados - parciales} pendiente{total - pagados - parciales !== 1 ? 's' : ''}</span>
           </div>
-          <div className="h-1.5 bg-stone-100 rounded-full overflow-hidden">
+          <div className="h-1.5 bg-cream-100 rounded-full overflow-hidden">
             <div
               className="h-full bg-emerald-400 rounded-full transition-all duration-500"
               style={{ width: `${(pagados / total) * 100}%` }}
@@ -1277,20 +1289,23 @@ function FloatingPayBar({ count, onClick, onCalcular }) {
       {onCalcular && (
         <button
           onClick={onCalcular}
-          className="bg-white border border-stone-300 text-stone-700 hover:bg-stone-50 px-4 py-3 rounded-full shadow-lg flex items-center gap-2 font-medium text-sm"
+          className="bg-white border border-cream-300 text-cream-700 hover:bg-cream-50 px-4 py-3 rounded-full shadow-lg flex items-center gap-2 font-medium text-sm"
         >
           <Calculator size={16} />
           Calcular importe
         </button>
       )}
-      <button
+      <motion.button
         onClick={onClick}
-        className="bg-emerald-700 hover:bg-emerald-800 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-3 font-medium"
+        whileHover={{ scale: 1.03, y: -2 }}
+        whileTap={{ scale: 0.97 }}
+        transition={{ type: 'spring', stiffness: 400, damping: 22 }}
+        className="bg-gradient-to-b from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 shadow-lg shadow-brand-600/30 text-white px-6 py-3 rounded-full flex items-center gap-3 font-medium"
       >
         <DollarSign size={18} />
         Cobrar {count} {count === 1 ? 'cuota' : 'cuotas'}
         <ChevronRight size={16} />
-      </button>
+      </motion.button>
     </div>
   );
 }
@@ -1391,45 +1406,45 @@ function CalcularImporteModal({ data, update, selectedPeriodos, onClose }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 overflow-y-auto">
       <div className="bg-white rounded-2xl max-w-lg w-full my-8 max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white border-b border-stone-200 px-6 py-4 flex items-center justify-between">
+        <div className="sticky top-0 bg-white border-b border-cream-200 px-6 py-4 flex items-center justify-between">
           <h2 className="font-semibold">Calcular importe</h2>
           <button onClick={onClose}><X size={20} /></button>
         </div>
         <div className="p-6 space-y-4">
           {gruposArr.length === 0 ? (
-            <p className="text-sm text-stone-400 text-center py-6">No hay cuotas seleccionadas.</p>
+            <p className="text-sm text-cream-400 text-center py-6">No hay cuotas seleccionadas.</p>
           ) : gruposArr.map((g, idx) => {
             const mensaje = generarMensaje(g);
             return (
-              <div key={idx} className="border border-stone-200 rounded-xl p-4 space-y-3">
+              <div key={idx} className="border border-cream-200 rounded-xl p-4 space-y-3">
                 <div className="font-medium text-sm">{g.alumnos.map(a => fullName(a)).join(' y ')}</div>
                 <div className="space-y-1 text-sm">
                   {g.lineas.map((l, i) => (
-                    <div key={i} className="flex justify-between text-stone-600">
+                    <div key={i} className="flex justify-between text-cream-600">
                       <span>
                         {g.alumnos.length > 1 ? `${l.alumno.nombre} — ` : ''}{l.periodo.full}{l.esSaldo ? ' (saldo)' : ''}
                       </span>
-                      <span className="font-medium text-stone-900">{fmtMoney(l.calc.efectivo)}</span>
+                      <span className="font-medium text-cream-900">{fmtMoney(l.calc.efectivo)}</span>
                     </div>
                   ))}
                 </div>
-                <div className="flex justify-between text-sm pt-2 border-t border-stone-100 font-semibold">
+                <div className="flex justify-between text-sm pt-2 border-t border-cream-100 font-semibold">
                   <span>Total (efectivo)</span>
                   <span>{fmtMoney(g.totalEfectivo)}</span>
                 </div>
-                <div className="flex justify-between text-xs text-stone-500">
+                <div className="flex justify-between text-xs text-cream-500">
                   <span>Total (transferencia/MP)</span>
                   <span>{fmtMoney(g.totalTransferencia)}</span>
                 </div>
-                <textarea readOnly value={mensaje} rows={4} className="w-full px-3 py-2 rounded-lg border border-stone-200 text-xs text-stone-600 bg-stone-50" />
+                <textarea readOnly value={mensaje} rows={4} className="w-full px-3 py-2 rounded-lg border border-cream-200 text-xs text-cream-600 bg-cream-50" />
                 <div className="flex gap-2">
-                  <button onClick={() => copiar(idx, mensaje)} className="flex-1 px-3 py-2 rounded-lg border border-stone-200 text-sm hover:bg-stone-50">
+                  <button onClick={() => copiar(idx, mensaje)} className="flex-1 px-3 py-2 rounded-lg border border-cream-200 text-sm hover:bg-cream-50">
                     {copiadoIdx === idx ? 'Copiado ✓' : 'Copiar mensaje'}
                   </button>
                   {g.phone && (
                     <button
                       onClick={() => window.open(`https://wa.me/${g.phone}?text=${encodeURIComponent(mensaje)}`, '_blank')}
-                      className="flex-1 px-3 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm flex items-center justify-center gap-1.5"
+                      className="flex-1 px-3 py-2 rounded-lg bg-gradient-to-b from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 shadow-md shadow-brand-600/25 text-white text-sm flex items-center justify-center gap-1.5"
                     >
                       <MessageCircle size={14} /> Enviar WhatsApp
                     </button>
@@ -1806,20 +1821,20 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
     return (
       <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 overflow-y-auto">
         <div className="bg-white rounded-2xl max-w-2xl w-full my-8 max-h-[90vh] overflow-y-auto">
-          <div className="sticky top-0 bg-white border-b border-stone-200 px-6 py-4 flex items-center justify-between">
+          <div className="sticky top-0 bg-white border-b border-cream-200 px-6 py-4 flex items-center justify-between">
             <div>
               <h2 className="font-semibold text-lg">✓ Pago registrado</h2>
-              <p className="text-xs text-stone-500 mt-0.5">Enviá la confirmación por WhatsApp</p>
+              <p className="text-xs text-cream-500 mt-0.5">Enviá la confirmación por WhatsApp</p>
             </div>
-            <button onClick={onClose} className="text-stone-400 hover:text-stone-700 p-1">
+            <button onClick={onClose} className="text-cream-400 hover:text-cream-700 p-1">
               <X size={20} />
             </button>
           </div>
 
           <div className="p-6 space-y-3">
             {waGroups.length === 0 && waSinCelular.length === 0 ? (
-              <div className="text-center text-stone-500 py-8">
-                <AlertCircle size={28} className="mx-auto mb-2 text-stone-400" />
+              <div className="text-center text-cream-500 py-8">
+                <AlertCircle size={28} className="mx-auto mb-2 text-cream-400" />
                 Ninguno de los alumnos tiene celular cargado. No se puede enviar WhatsApp.
               </div>
             ) : (
@@ -1838,18 +1853,18 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
                   />
                 ))}
                 {waGroups.map((g, idx) => (
-                  <div key={idx} className={`border rounded-xl p-4 ${g.sent ? 'border-emerald-300 bg-emerald-50/40' : 'border-stone-200'}`}>
+                  <div key={idx} className={`border rounded-xl p-4 ${g.sent ? 'border-emerald-300 bg-emerald-50/40' : 'border-cream-200'}`}>
                     <div className="flex items-start justify-between gap-3 mb-2">
                       <div className="flex-1 min-w-0">
                         <div className="font-medium text-sm">
                           {g.alumnos.map(a => a.nombre).join(' + ')}
                         </div>
-                        <div className="text-xs text-stone-500">{g.rawPhone} · Total: {fmtMoney(g.total)}</div>
+                        <div className="text-xs text-cream-500">{g.rawPhone} · Total: {fmtMoney(g.total)}</div>
                       </div>
                       <button
                         onClick={() => sendWA(idx)}
                         className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 whitespace-nowrap ${
-                          g.sent ? 'bg-emerald-100 text-emerald-700' : 'bg-emerald-700 hover:bg-emerald-800 text-white'
+                          g.sent ? 'bg-emerald-100 text-emerald-700' : 'bg-gradient-to-b from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 shadow-md shadow-brand-600/25 text-white'
                         }`}
                       >
                         <MessageCircle size={14} />
@@ -1857,8 +1872,8 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
                       </button>
                     </div>
                     <details className="mt-2">
-                      <summary className="text-xs text-stone-500 cursor-pointer hover:text-stone-800">Ver mensaje</summary>
-                      <pre className="mt-2 text-xs bg-stone-50 rounded p-2 whitespace-pre-wrap font-sans text-stone-700">{g.mensaje}</pre>
+                      <summary className="text-xs text-cream-500 cursor-pointer hover:text-cream-800">Ver mensaje</summary>
+                      <pre className="mt-2 text-xs bg-cream-50 rounded p-2 whitespace-pre-wrap font-sans text-cream-700">{g.mensaje}</pre>
                     </details>
                     {g.alumnos.filter(a => !a.contactoNombre).map(a => (
                       <ContactoNombreInline
@@ -1877,8 +1892,8 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
                 onClick={onClose}
                 className={`w-full px-4 py-3 rounded-xl font-medium ${
                   allSent || waGroups.length === 0
-                    ? 'bg-emerald-700 hover:bg-emerald-800 text-white'
-                    : 'border border-stone-200 text-stone-700 hover:bg-stone-50'
+                    ? 'bg-gradient-to-b from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 shadow-md shadow-brand-600/25 text-white'
+                    : 'border border-cream-200 text-cream-700 hover:bg-cream-50'
                 }`}
               >
                 {allSent || waGroups.length === 0 ? 'Listo' : 'Cerrar sin enviar todos'}
@@ -1894,9 +1909,9 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 overflow-y-auto">
       <div className="bg-white rounded-2xl max-w-2xl w-full my-8 max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white border-b border-stone-200 px-6 py-4 flex items-center justify-between">
+        <div className="sticky top-0 bg-white border-b border-cream-200 px-6 py-4 flex items-center justify-between">
           <h2 className="font-semibold text-lg">Confirmar cobro</h2>
-          <button onClick={onClose} className="text-stone-400 hover:text-stone-700 p-1">
+          <button onClick={onClose} className="text-cream-400 hover:text-cream-700 p-1">
             <X size={20} />
           </button>
         </div>
@@ -1905,28 +1920,28 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
           {/* Fecha y hora del pago (por defecto, ahora mismo) */}
           <div>
             {editandoFechaPago ? (
-              <div className="bg-stone-50 border border-stone-200 rounded-lg p-3 flex items-end gap-2 flex-wrap">
+              <div className="bg-cream-50 border border-cream-200 rounded-lg p-3 flex items-end gap-2 flex-wrap">
                 <div>
-                  <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Fecha en que se abonó</label>
+                  <label className="text-xs text-cream-500 font-medium uppercase tracking-wider">Fecha en que se abonó</label>
                   <input
                     type="date"
                     value={fechaPagoManual}
                     onChange={e => setFechaPagoManual(e.target.value)}
-                    className="mt-1 px-3 py-2 rounded-lg border border-stone-200 bg-white text-sm"
+                    className="mt-1 px-3 py-2 rounded-lg border border-cream-200 bg-white text-sm"
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Hora</label>
+                  <label className="text-xs text-cream-500 font-medium uppercase tracking-wider">Hora</label>
                   <input
                     type="time"
                     value={horaPagoManual}
                     onChange={e => setHoraPagoManual(e.target.value)}
-                    className="mt-1 px-3 py-2 rounded-lg border border-stone-200 bg-white text-sm"
+                    className="mt-1 px-3 py-2 rounded-lg border border-cream-200 bg-white text-sm"
                   />
                 </div>
                 <button
                   onClick={() => setEditandoFechaPago(false)}
-                  className="text-xs text-stone-500 hover:text-red-600 px-2 py-2"
+                  className="text-xs text-cream-500 hover:text-red-600 px-2 py-2"
                 >
                   Usar el momento actual
                 </button>
@@ -1934,7 +1949,7 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
             ) : (
               <button
                 onClick={() => setEditandoFechaPago(true)}
-                className="text-xs text-stone-500 hover:text-emerald-700 underline"
+                className="text-xs text-cream-500 hover:text-emerald-700 underline"
               >
                 ¿Se abonó en otro momento? Cambiar fecha y hora
               </button>
@@ -1965,17 +1980,17 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
                       <div>
                         <div className="font-medium text-sm flex items-center gap-2">
                           {fullName(l.alumno)}
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 bg-emerald-700 text-white rounded">SALDO</span>
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 bg-brand-600 text-white rounded">SALDO</span>
                         </div>
-                        <div className="text-xs text-stone-500">{l.periodo.full} · Saldo pendiente</div>
+                        <div className="text-xs text-cream-500">{l.periodo.full} · Saldo pendiente</div>
                       </div>
                       <div className="text-right">
-                        <div className="text-xs text-stone-500">A cobrar</div>
+                        <div className="text-xs text-cream-500">A cobrar</div>
                         <div className="font-semibold text-emerald-700">{fmtMoney(l.montoSaldo)}</div>
                       </div>
                     </div>
                     {l.estadoCuota && (
-                      <div className="mt-2 pt-2 border-t border-emerald-200/60 text-xs text-stone-600 flex justify-between">
+                      <div className="mt-2 pt-2 border-t border-emerald-200/60 text-xs text-cream-600 flex justify-between">
                         <span>Total cuota: {fmtMoney(l.estadoCuota.precioFijado)}</span>
                         <span>Ya cobrado: {fmtMoney(l.estadoCuota.cobrado)}</span>
                       </div>
@@ -1992,13 +2007,13 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
               const saldoSiParcial = Math.max(0, precioTotal - montoParcial);
 
               return (
-                <div key={k} className="border border-stone-200 rounded-xl p-4">
+                <div key={k} className="border border-cream-200 rounded-xl p-4">
                   <div className="flex items-center justify-between mb-2">
                     <div>
                       <div className="font-medium text-sm">{fullName(l.alumno)}</div>
-                      <div className="text-xs text-stone-500">{l.periodo.full}{l.calc.etapa ? ` · ${l.calc.etapa}` : ''}</div>
+                      <div className="text-xs text-cream-500">{l.periodo.full}{l.calc.etapa ? ` · ${l.calc.etapa}` : ''}</div>
                     </div>
-                    <div className="text-xs text-stone-400">
+                    <div className="text-xs text-cream-400">
                       {l.calc.recargoPct > 0 && <span>+{l.calc.recargoPct}% recargo · </span>}
                       {l.calc.descuentoHermano > 0 && <span>-{l.calc.descuentoHermano}% hermano · </span>}
                       {l.calc.promo > 0 && <span>-{fmtMoney(l.calc.promo)} promo · </span>}
@@ -2011,27 +2026,27 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
                       onClick={() => setMetodo(l, 'efectivo')}
                       disabled={l.calc.soloTransferencia}
                       className={`p-3 rounded-lg border text-left transition-colors ${
-                        l.calc.soloTransferencia ? 'opacity-40 cursor-not-allowed border-stone-200' :
-                        metodo === 'efectivo' ? 'border-emerald-500 bg-emerald-50' : 'border-stone-200 hover:border-stone-300'
+                        l.calc.soloTransferencia ? 'opacity-40 cursor-not-allowed border-cream-200' :
+                        metodo === 'efectivo' ? 'border-emerald-500 bg-emerald-50' : 'border-cream-200 hover:border-cream-300'
                       }`}
                     >
-                      <div className="text-xs text-stone-500">Efectivo</div>
+                      <div className="text-xs text-cream-500">Efectivo</div>
                       <div className="font-semibold">{l.calc.soloTransferencia ? '—' : fmtMoney(l.calc.efectivo)}</div>
                     </button>
                     <button
                       onClick={() => setMetodo(l, 'transferencia')}
                       className={`p-3 rounded-lg border text-left transition-colors ${
-                        metodo === 'transferencia' ? 'border-emerald-500 bg-emerald-50' : 'border-stone-200 hover:border-stone-300'
+                        metodo === 'transferencia' ? 'border-emerald-500 bg-emerald-50' : 'border-cream-200 hover:border-cream-300'
                       }`}
                     >
-                      <div className="text-xs text-stone-500">Transferencia / MP</div>
+                      <div className="text-xs text-cream-500">Transferencia / MP</div>
                       <div className="font-semibold">{fmtMoney(l.calc.transferencia)}</div>
                     </button>
                   </div>
 
                   {/* Toggle Sin recargo */}
                   {(l.calc.recargoPct > 0 || (l.alumno.sinRecargo || []).includes(`${l.periodoId}-${l.anio}`)) && (
-                    <div className="mt-3 pt-3 border-t border-stone-100">
+                    <div className="mt-3 pt-3 border-t border-cream-100">
                       <label className="flex items-center gap-2 cursor-pointer select-none">
                         <input
                           type="checkbox"
@@ -2044,19 +2059,19 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
                           }}
                           className="rounded accent-emerald-700"
                         />
-                        <span className="text-sm text-stone-700">Sin recargo para esta cuota</span>
-                        <span className="text-xs text-stone-400">(avisó que paga tarde)</span>
+                        <span className="text-sm text-cream-700">Sin recargo para esta cuota</span>
+                        <span className="text-xs text-cream-400">(avisó que paga tarde)</span>
                       </label>
                     </div>
                   )}
 
                   {/* Toggle Total / Parcial */}
-                  <div className="mt-3 pt-3 border-t border-stone-100">
+                  <div className="mt-3 pt-3 border-t border-cream-100">
                     <div className="flex gap-2">
                       <button
                         onClick={() => setModalidad(l, 'total')}
                         className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium border transition-colors ${
-                          modalidad === 'total' ? 'bg-emerald-700 text-white border-emerald-700' : 'border-stone-200 text-stone-600 hover:bg-stone-50'
+                          modalidad === 'total' ? 'bg-brand-600 text-white border-brand-600' : 'border-cream-200 text-cream-600 hover:bg-cream-50'
                         }`}
                       >
                         Pago total
@@ -2064,7 +2079,7 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
                       <button
                         onClick={() => setModalidad(l, 'parcial')}
                         className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium border transition-colors ${
-                          modalidad === 'parcial' ? 'bg-amber-500 text-white border-amber-500' : 'border-stone-200 text-stone-600 hover:bg-stone-50'
+                          modalidad === 'parcial' ? 'bg-amber-500 text-white border-amber-500' : 'border-cream-200 text-cream-600 hover:bg-cream-50'
                         }`}
                       >
                         Pago parcial
@@ -2093,7 +2108,7 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
                               onChange={e => setMontoParcial(l, e.target.value)}
                               readOnly={vinculadoACombinado}
                               className={`w-full mt-1 px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2 focus:ring-amber-200 ${
-                                vinculadoACombinado ? 'bg-stone-100 border-stone-200 cursor-not-allowed text-stone-700' : 'bg-white border-amber-300'
+                                vinculadoACombinado ? 'bg-cream-100 border-cream-200 cursor-not-allowed text-cream-700' : 'bg-white border-amber-300'
                               }`}
                             />
                           </div>
@@ -2136,7 +2151,7 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
                           ) : (
                             <button
                               onClick={() => setMontoExtra(l, '')}
-                              className="text-xs text-stone-500 hover:text-emerald-700 underline"
+                              className="text-xs text-cream-500 hover:text-emerald-700 underline"
                             >
                               ¿Pagó de más? Dejar un adicional a favor del próximo mes
                             </button>
@@ -2151,7 +2166,7 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
           </div>
 
           {/* Total */}
-          <div className="border-t border-stone-200 pt-4">
+          <div className="border-t border-cream-200 pt-4">
             <div className="flex items-center justify-between text-lg">
               <span className="font-medium">Total a cobrar</span>
               <span className="font-bold text-emerald-700">{fmtMoney(totales.total)}</span>
@@ -2163,7 +2178,7 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
             const lineasParciales = lineas.filter(l => !l.calc?.error && !l.esSaldo && getModalidad(l) === 'parcial');
             const vinculadoAParcial = usaMixto && lineasParciales.length === 1;
             return (
-              <div className={`rounded-xl p-4 transition-colors ${usaMixto ? 'bg-emerald-50/40 border border-emerald-200' : 'bg-stone-50'}`}>
+              <div className={`rounded-xl p-4 transition-colors ${usaMixto ? 'bg-emerald-50/40 border border-emerald-200' : 'bg-cream-50'}`}>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox" checked={usaMixto} onChange={e => setUsaMixto(e.target.checked)} className="rounded" />
                   <span className="text-sm font-medium">Pago combinado (efectivo + MP + transferencia)</span>
@@ -2182,20 +2197,20 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
                         { k: 'transferencia', label: 'Transferencia' }
                       ].map(({ k, label }) => (
                         <div key={k}>
-                          <label className="text-xs text-stone-500">{label}</label>
+                          <label className="text-xs text-cream-500">{label}</label>
                           <input
                             type="number"
                             value={distribuciones[k] || ''}
                             placeholder="0"
                             onChange={e => setDistribuciones({ ...distribuciones, [k]: Number(e.target.value) || 0 })}
-                            className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                            className="w-full mt-1 px-3 py-2 rounded-lg border border-cream-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
                           />
                         </div>
                       ))}
                     </div>
 
-                    <div className="mt-3 pt-3 border-t border-stone-200 flex items-center justify-between text-sm">
-                      <span className="text-stone-600">Cobrado: <strong className="text-stone-900">{fmtMoney(sumDistr)}</strong> de {fmtMoney(totales.total)}</span>
+                    <div className="mt-3 pt-3 border-t border-cream-200 flex items-center justify-between text-sm">
+                      <span className="text-cream-600">Cobrado: <strong className="text-cream-900">{fmtMoney(sumDistr)}</strong> de {fmtMoney(totales.total)}</span>
                       {distrOk ? (
                         <span className="text-emerald-700 font-semibold flex items-center gap-1">
                           <Check size={16} /> Completo
@@ -2214,13 +2229,13 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
 
           {/* Botones */}
           <div className="flex gap-2">
-            <button onClick={onClose} className="flex-1 px-4 py-3 rounded-xl border border-stone-200 text-stone-700 hover:bg-stone-50 font-medium">
+            <button onClick={onClose} className="flex-1 px-4 py-3 rounded-xl border border-cream-200 text-cream-700 hover:bg-cream-50 font-medium">
               Cancelar
             </button>
             <button
               onClick={handleConfirm}
               disabled={(usaMixto && !distrOk) || totales.total === 0 || hayParcialesInvalidas}
-              className="flex-1 px-4 py-3 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 px-4 py-3 rounded-xl bg-gradient-to-b from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 shadow-md shadow-brand-600/25 text-white font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Check size={18} />
               Cobrar
@@ -2299,9 +2314,9 @@ function AlumnosTab({ data, update }) {
 
   return (
     <div className="space-y-4">
-      <div className="bg-white rounded-2xl border border-stone-200 p-6 space-y-4">
+      <div className="bg-white rounded-2xl border border-cream-200 p-6 space-y-4">
         {/* Sub-tabs */}
-        <div className="flex gap-1 border-b border-stone-200 -mx-6 px-6 -mt-6 pt-4 mb-0">
+        <div className="flex gap-1 border-b border-cream-200 -mx-6 px-6 -mt-6 pt-4 mb-0">
           {[
             { id: 'lista', label: 'Alumnos' },
             { id: 'grupos', label: `Grupos familiares${data.gruposFamiliares.length > 0 ? ' · ' + data.gruposFamiliares.length : ''}` },
@@ -2311,7 +2326,7 @@ function AlumnosTab({ data, update }) {
               key={t.id}
               onClick={() => setSubTab(t.id)}
               className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-all ${
-                subTab === t.id ? 'border-emerald-700 text-emerald-800' : 'border-transparent text-stone-500 hover:text-stone-800'
+                subTab === t.id ? 'border-brand-600 text-brand-600' : 'border-transparent text-cream-500 hover:text-cream-800'
               }`}
             >
               {t.label}
@@ -2323,29 +2338,32 @@ function AlumnosTab({ data, update }) {
           <>
             <div className="flex items-center gap-3 pt-2">
               <div className="relative flex-1">
-                <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400" />
+                <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-cream-400" />
                 <input
                   type="text"
                   value={query}
                   onChange={e => setQuery(e.target.value)}
                   placeholder="Buscar alumno..."
-                  className="w-full pl-11 pr-4 py-3 rounded-xl border border-stone-200 bg-white"
+                  className="w-full pl-11 pr-4 py-3 rounded-xl border border-cream-200 bg-white"
                 />
               </div>
-              <button
+              <motion.button
                 onClick={() => setEditing('new')}
-                className="bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-3 rounded-xl font-medium flex items-center gap-2 whitespace-nowrap"
+                whileHover={{ scale: 1.03, y: -2 }}
+                whileTap={{ scale: 0.97 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 22 }}
+                className="bg-gradient-to-b from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 shadow-md shadow-brand-600/25 text-white px-4 py-3 rounded-xl font-medium flex items-center gap-2 whitespace-nowrap"
               >
                 <Plus size={18} /> Nuevo alumno
-              </button>
+              </motion.button>
             </div>
             <div className="flex flex-wrap gap-3 items-center">
               <div className="flex items-center gap-2">
-                <label className="text-xs uppercase tracking-wider text-stone-500 font-medium">Curso:</label>
+                <label className="text-xs uppercase tracking-wider text-cream-500 font-medium">Curso:</label>
                 <select
                   value={filtroCurso}
                   onChange={e => setFiltroCurso(e.target.value)}
-                  className="px-3 py-2 rounded-lg border border-stone-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                  className="px-3 py-2 rounded-lg border border-cream-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
                 >
                   <option value="todos">Todos · {data.alumnos.filter(a => a.activo).length}</option>
                   {data.cursos.filter(c => c.activo).map(curso => (
@@ -2363,7 +2381,7 @@ function AlumnosTab({ data, update }) {
                   <span className="flex items-center gap-1.5"><AlertCircle size={12} /> Faltan datos · {incompletos.length}</span>
                 </FilterChip>
               )}
-              <label className="ml-auto text-xs text-stone-500 flex items-center gap-1.5 cursor-pointer">
+              <label className="ml-auto text-xs text-cream-500 flex items-center gap-1.5 cursor-pointer">
                 <input type="checkbox" checked={mostrarInactivos} onChange={e => setMostrarInactivos(e.target.checked)} className="rounded" />
                 Mostrar inactivos
               </label>
@@ -2374,26 +2392,26 @@ function AlumnosTab({ data, update }) {
 
       {subTab === 'lista' && (
         <>
-          <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden">
+          <div className="bg-white rounded-2xl border border-cream-200 overflow-hidden">
             {filtered.length === 0 ? (
-              <div className="p-12 text-center text-stone-400 text-sm">No hay alumnos</div>
+              <div className="p-12 text-center text-cream-400 text-sm">No hay alumnos</div>
             ) : (
-              <div className="divide-y divide-stone-100">
+              <div className="divide-y divide-cream-100">
                 {filtered.map(a => {
                   const curso = data.cursos.find(c => c.id === a.cursoId);
                   const grupo = data.gruposFamiliares.find(g => g.id === a.grupoFamiliarId);
                   const faltantes = datosFaltantes(a);
                   return (
-                    <div key={a.id} className={`flex items-center gap-3 px-5 py-3 hover:bg-stone-50 ${!a.activo ? 'opacity-50' : ''}`}>
+                    <div key={a.id} className={`flex items-center gap-3 px-5 py-3 hover:bg-cream-50 ${!a.activo ? 'opacity-50' : ''}`}>
                       <Avatar alumno={a} />
                       <div className="flex-1 min-w-0">
                         <div className="font-medium text-sm flex items-center gap-2">
                           {fullName(a)}
-                          {!a.activo && <span className="text-xs px-1.5 py-0.5 bg-stone-200 text-stone-600 rounded">Inactivo</span>}
+                          {!a.activo && <span className="text-xs px-1.5 py-0.5 bg-cream-200 text-cream-600 rounded">Inactivo</span>}
                           {grupo && <span className="text-xs px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded flex items-center gap-1"><Home size={10} />{grupo.nombre}</span>}
                           {a.saldoAFavor > 0 && <span className="text-xs px-1.5 py-0.5 bg-sky-50 text-sky-700 rounded font-medium">A favor {fmtMoney(a.saldoAFavor)}</span>}
                         </div>
-                        <div className="text-xs text-stone-500 truncate">
+                        <div className="text-xs text-cream-500 truncate">
                           {curso?.nombre || 'Sin curso'} · {a.horarioCurso || (a.dia ? `${a.dia} ${a.horario || ''}` : 'Sin horario')} · DNI {a.dni}
                           {a.contactoNombre && <> · {a.contactoNombre}</>}
                         </div>
@@ -2414,11 +2432,11 @@ function AlumnosTab({ data, update }) {
                           <CreditCard size={14} /> Ver cuotas
                         </button>
                       )}
-                      <button onClick={() => setEditing(a)} className="p-2 text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-lg">
+                      <button onClick={() => setEditing(a)} className="p-2 text-cream-400 hover:text-cream-700 hover:bg-cream-100 rounded-lg">
                         <Edit2 size={16} />
                       </button>
                       {a.activo ? (
-                        <button onClick={() => deleteAlumno(a.id)} className="p-2 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
+                        <button onClick={() => deleteAlumno(a.id)} className="p-2 text-cream-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
                           <Trash2 size={16} />
                         </button>
                       ) : (
@@ -2469,30 +2487,30 @@ function AlumnosTab({ data, update }) {
       )}
 
       {subTab === 'inactivos' && (
-        <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden">
+        <div className="bg-white rounded-2xl border border-cream-200 overflow-hidden">
           {inactivos.length === 0 ? (
-            <div className="p-12 text-center text-stone-400 text-sm">No hay alumnos dados de baja</div>
+            <div className="p-12 text-center text-cream-400 text-sm">No hay alumnos dados de baja</div>
           ) : (
-            <div className="divide-y divide-stone-100">
+            <div className="divide-y divide-cream-100">
               {inactivos.map(a => {
                 const curso = data.cursos.find(c => c.id === a.cursoId);
                 return (
-                  <div key={a.id} className="flex items-center gap-3 px-5 py-3 hover:bg-stone-50 opacity-75">
+                  <div key={a.id} className="flex items-center gap-3 px-5 py-3 hover:bg-cream-50 opacity-75">
                     <Avatar alumno={a} />
                     <div className="flex-1 min-w-0">
                       <div className="font-medium text-sm">{fullName(a)}</div>
-                      <div className="text-xs text-stone-500 truncate">
+                      <div className="text-xs text-cream-500 truncate">
                         {curso?.nombre || 'Sin curso'} · DNI {a.dni}
                         {a.fechaAlta && <> · Última alta: {a.fechaAlta}</>}
                       </div>
                     </div>
                     <button
                       onClick={() => setDandoAltaId(a.id)}
-                      className="bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 whitespace-nowrap"
+                      className="bg-gradient-to-b from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 shadow-md shadow-brand-600/25 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 whitespace-nowrap"
                     >
                       <UserPlus size={14} /> Dar de alta
                     </button>
-                    <button onClick={() => setEditing(a)} className="p-2 text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-lg">
+                    <button onClick={() => setEditing(a)} className="p-2 text-cream-400 hover:text-cream-700 hover:bg-cream-100 rounded-lg">
                       <Edit2 size={16} />
                     </button>
                   </div>
@@ -2563,15 +2581,15 @@ function GruposFamiliaresView({ data, update }) {
   return (
     <div className="space-y-3">
       {/* Header */}
-      <div className="bg-white rounded-2xl border border-stone-200 p-5 flex items-center justify-between">
+      <div className="bg-white rounded-2xl border border-cream-200 p-5 flex items-center justify-between">
         <div>
-          <p className="text-sm text-stone-500">
+          <p className="text-sm text-cream-500">
             Agrupá hermanos para aplicar el descuento automático configurado en Configuración.
           </p>
         </div>
         <button
           onClick={() => { setCreando(true); setExpandido(null); }}
-          className="bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 whitespace-nowrap ml-4"
+          className="bg-gradient-to-b from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 shadow-md shadow-brand-600/25 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 whitespace-nowrap ml-4"
         >
           <Plus size={16} /> Nuevo grupo
         </button>
@@ -2580,7 +2598,7 @@ function GruposFamiliaresView({ data, update }) {
       {/* Formulario de nuevo grupo */}
       {creando && (
         <div className="bg-white rounded-2xl border border-emerald-300 p-5">
-          <div className="text-sm font-medium text-stone-700 mb-3">Nombre del nuevo grupo</div>
+          <div className="text-sm font-medium text-cream-700 mb-3">Nombre del nuevo grupo</div>
           <div className="flex gap-2">
             <input
               type="text"
@@ -2589,18 +2607,18 @@ function GruposFamiliaresView({ data, update }) {
               onKeyDown={e => e.key === 'Enter' && crearGrupo()}
               placeholder="Ej: García, López, Familia Martínez..."
               autoFocus
-              className="flex-1 px-3 py-2 rounded-lg border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+              className="flex-1 px-3 py-2 rounded-lg border border-cream-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
             />
             <button
               onClick={crearGrupo}
               disabled={!nuevoNombre.trim()}
-              className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-sm font-medium disabled:opacity-50"
+              className="px-4 py-2 bg-gradient-to-b from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 shadow-md shadow-brand-600/25 text-white rounded-lg text-sm font-medium disabled:opacity-50"
             >
               Crear
             </button>
             <button
               onClick={() => { setCreando(false); setNuevoNombre(''); }}
-              className="px-3 py-2 text-stone-500 hover:text-stone-800 text-sm"
+              className="px-3 py-2 text-cream-500 hover:text-cream-800 text-sm"
             >
               Cancelar
             </button>
@@ -2610,7 +2628,7 @@ function GruposFamiliaresView({ data, update }) {
 
       {/* Lista vacía */}
       {gruposOrdenados.length === 0 && !creando && (
-        <div className="bg-white rounded-2xl border border-stone-200 p-12 text-center text-stone-400">
+        <div className="bg-white rounded-2xl border border-cream-200 p-12 text-center text-cream-400">
           <Users size={36} className="mx-auto mb-3 opacity-30" />
           <p className="text-sm font-medium mb-1">No hay grupos creados todavía</p>
           <p className="text-xs">Hacé click en "Nuevo grupo" para crear uno y agregar hermanos</p>
@@ -2642,10 +2660,10 @@ function GruposFamiliaresView({ data, update }) {
           : [];
 
         return (
-          <div key={grupo.id} className="bg-white rounded-2xl border border-stone-200 overflow-visible">
+          <div key={grupo.id} className="bg-white rounded-2xl border border-cream-200 overflow-visible">
             {/* Cabecera del grupo */}
             <div
-              className="flex items-center gap-3 px-5 py-4 cursor-pointer hover:bg-stone-50 rounded-2xl"
+              className="flex items-center gap-3 px-5 py-4 cursor-pointer hover:bg-cream-50 rounded-2xl"
               onClick={() => setExpandido(isOpen ? null : grupo.id)}
             >
               <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
@@ -2662,37 +2680,37 @@ function GruposFamiliaresView({ data, update }) {
                       autoFocus
                       className="flex-1 px-2 py-1 rounded-lg border border-emerald-400 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                     />
-                    <button onClick={() => guardarRenombre(grupo.id)} className="px-3 py-1 bg-emerald-700 text-white rounded-lg text-xs">Guardar</button>
-                    <button onClick={() => setRenombrando(null)} className="px-2 py-1 text-stone-500 text-xs">✕</button>
+                    <button onClick={() => guardarRenombre(grupo.id)} className="px-3 py-1 bg-brand-600 text-white rounded-lg text-xs">Guardar</button>
+                    <button onClick={() => setRenombrando(null)} className="px-2 py-1 text-cream-500 text-xs">✕</button>
                   </div>
                 ) : (
-                  <div className="font-semibold text-stone-900">{grupo.nombre}</div>
+                  <div className="font-semibold text-cream-900">{grupo.nombre}</div>
                 )}
-                <div className="text-xs text-stone-500 mt-0.5">
+                <div className="text-xs text-cream-500 mt-0.5">
                   {miembros.length === 0 ? 'Sin miembros' : `${miembros.length} miembro${miembros.length !== 1 ? 's' : ''}`}
                   {miembros.length > 0 && ` · ${miembros.map(a => a.nombre).join(', ')}`}
                 </div>
               </div>
               <ChevronRight
                 size={18}
-                className={`text-stone-400 transition-transform shrink-0 ${isOpen ? 'rotate-90' : ''}`}
+                className={`text-cream-400 transition-transform shrink-0 ${isOpen ? 'rotate-90' : ''}`}
               />
             </div>
 
             {/* Panel expandido */}
             {isOpen && (
-              <div className="border-t border-stone-100 px-5 py-5 space-y-5">
+              <div className="border-t border-cream-100 px-5 py-5 space-y-5">
 
                 {/* Miembros actuales */}
                 <div>
-                  <div className="text-xs uppercase tracking-wider text-stone-500 font-medium mb-2">
+                  <div className="text-xs uppercase tracking-wider text-cream-500 font-medium mb-2">
                     Miembros del grupo
                     {miembros.length > 1 && (
-                      <span className="ml-2 text-stone-400 normal-case font-normal">(de mayor a menor cuota — el mayor descuento va al más barato)</span>
+                      <span className="ml-2 text-cream-400 normal-case font-normal">(de mayor a menor cuota — el mayor descuento va al más barato)</span>
                     )}
                   </div>
                   {miembros.length === 0 ? (
-                    <p className="text-sm text-stone-400 italic">Sin miembros — buscá alumnos abajo para agregar</p>
+                    <p className="text-sm text-cream-400 italic">Sin miembros — buscá alumnos abajo para agregar</p>
                   ) : (
                     <div className="space-y-1.5">
                       {miembros.map((a, idx) => {
@@ -2708,28 +2726,28 @@ function GruposFamiliaresView({ data, update }) {
                           descuentos.forEach(d => { if (posicion >= d.posicion) descPct = d.porcentaje; });
                         }
                         return (
-                          <div key={a.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-stone-50 border border-stone-100">
-                            <div className="w-6 h-6 rounded-full bg-stone-200 flex items-center justify-center text-xs font-bold text-stone-600 shrink-0">
+                          <div key={a.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-cream-50 border border-cream-100">
+                            <div className="w-6 h-6 rounded-full bg-cream-200 flex items-center justify-center text-xs font-bold text-cream-600 shrink-0">
                               {idx + 1}
                             </div>
                             <Avatar alumno={a} size="sm" />
                             <div className="flex-1 min-w-0">
                               <div className="text-sm font-medium truncate">{fullName(a)}</div>
-                              <div className="text-xs text-stone-500">{curso?.nombre || 'Sin curso'}</div>
+                              <div className="text-xs text-cream-500">{curso?.nombre || 'Sin curso'}</div>
                             </div>
                             <div className="text-right shrink-0">
                               {precio && (
-                                <div className="text-xs text-stone-500">{fmtMoney(precio.efectivo)}</div>
+                                <div className="text-xs text-cream-500">{fmtMoney(precio.efectivo)}</div>
                               )}
                               {descPct > 0 ? (
                                 <div className="text-xs font-semibold text-emerald-700">−{descPct}%</div>
                               ) : (
-                                <div className="text-xs text-stone-400">sin descuento</div>
+                                <div className="text-xs text-cream-400">sin descuento</div>
                               )}
                             </div>
                             <button
                               onClick={() => quitarAlumno(a.id)}
-                              className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg shrink-0"
+                              className="p-1.5 text-cream-400 hover:text-red-600 hover:bg-red-50 rounded-lg shrink-0"
                               title="Quitar del grupo"
                             >
                               <X size={14} />
@@ -2743,18 +2761,18 @@ function GruposFamiliaresView({ data, update }) {
 
                 {/* Buscador para agregar */}
                 <div>
-                  <div className="text-xs uppercase tracking-wider text-stone-500 font-medium mb-2">Agregar alumno al grupo</div>
+                  <div className="text-xs uppercase tracking-wider text-cream-500 font-medium mb-2">Agregar alumno al grupo</div>
                   <div className="relative">
-                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-cream-400" />
                     <input
                       type="text"
                       value={q}
                       onChange={e => setBusquedas(prev => ({ ...prev, [grupo.id]: e.target.value }))}
                       placeholder="Buscar por nombre o apellido..."
-                      className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                      className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-cream-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
                     />
                     {resultadosBusqueda.length > 0 && (
-                      <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-stone-200 rounded-xl shadow-lg overflow-hidden">
+                      <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-cream-200 rounded-xl shadow-lg overflow-hidden">
                         {resultadosBusqueda.map(a => {
                           const curso = data.cursos.find(c => c.id === a.cursoId);
                           const grupoActual = data.gruposFamiliares.find(g => g.id === a.grupoFamiliarId);
@@ -2762,12 +2780,12 @@ function GruposFamiliaresView({ data, update }) {
                             <button
                               key={a.id}
                               onClick={() => agregarAlumno(grupo.id, a.id)}
-                              className="w-full text-left px-4 py-2.5 hover:bg-emerald-50 flex items-center gap-3 border-b border-stone-100 last:border-0"
+                              className="w-full text-left px-4 py-2.5 hover:bg-emerald-50 flex items-center gap-3 border-b border-cream-100 last:border-0"
                             >
                               <Avatar alumno={a} size="sm" />
                               <div className="flex-1 min-w-0">
                                 <div className="text-sm font-medium">{fullName(a)}</div>
-                                <div className="text-xs text-stone-500">
+                                <div className="text-xs text-cream-500">
                                   {curso?.nombre || 'Sin curso'}
                                   {grupoActual && <span className="ml-1 text-amber-600"> · actualmente en "{grupoActual.nombre}"</span>}
                                 </div>
@@ -2782,10 +2800,10 @@ function GruposFamiliaresView({ data, update }) {
                 </div>
 
                 {/* Acciones del grupo */}
-                <div className="flex gap-2 pt-1 border-t border-stone-100">
+                <div className="flex gap-2 pt-1 border-t border-cream-100">
                   <button
                     onClick={() => { setRenombrando(grupo.id); setNombreEdit(grupo.nombre); }}
-                    className="text-sm text-stone-500 hover:text-stone-800 px-3 py-1.5 rounded-lg border border-stone-200 hover:bg-stone-50 flex items-center gap-1.5"
+                    className="text-sm text-cream-500 hover:text-cream-800 px-3 py-1.5 rounded-lg border border-cream-200 hover:bg-cream-50 flex items-center gap-1.5"
                   >
                     <Edit2 size={13} /> Renombrar
                   </button>
@@ -2845,15 +2863,27 @@ function AlumnoForm({ alumno, data, update, onSave, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl max-w-xl w-full my-8 max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white border-b border-stone-200 px-6 py-4 flex items-center justify-between">
+    <motion.div
+      className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 overflow-y-auto"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.15 }}
+    >
+      <motion.div
+        className="bg-white rounded-2xl max-w-xl w-full my-8 max-h-[90vh] overflow-y-auto"
+        initial={{ opacity: 0, scale: 0.96, y: 8 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.96, y: 8 }}
+        transition={{ duration: 0.18, ease: 'easeOut' }}
+      >
+        <div className="sticky top-0 bg-white border-b border-cream-200 px-6 py-4 flex items-center justify-between">
           <h2 className="font-semibold text-lg">{alumno ? 'Editar alumno' : 'Nuevo alumno'}</h2>
-          <button onClick={onClose} className="text-stone-400 hover:text-stone-700"><X size={20} /></button>
+          <button onClick={onClose} className="text-cream-400 hover:text-cream-700"><X size={20} /></button>
         </div>
         <div className="p-6 space-y-4">
           {alumno?.creadoEn && (
-            <p className="text-xs text-stone-400">
+            <p className="text-xs text-cream-400">
               Cargado en el sistema el {new Date(alumno.creadoEn + 'T00:00:00').toLocaleDateString('es-AR')}{alumno.creadoHora ? ` a las ${alumno.creadoHora}hs` : ''}
             </p>
           )}
@@ -2895,18 +2925,18 @@ function AlumnoForm({ alumno, data, update, onSave, onClose }) {
           )}
 
           <div>
-            <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Curso</label>
+            <label className="text-xs text-cream-500 font-medium uppercase tracking-wider">Curso</label>
             <select
               value={form.cursoId}
               onChange={e => set('cursoId', e.target.value)}
-              className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 bg-white"
+              className="w-full mt-1 px-3 py-2 rounded-lg border border-cream-200 bg-white"
             >
               {data.cursos.filter(c => c.activo).map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
             </select>
           </div>
 
           <div>
-            <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Horario</label>
+            <label className="text-xs text-cream-500 font-medium uppercase tracking-wider">Horario</label>
             {(() => {
               const cursoSeleccionado = data.cursos.find(c => c.id === form.cursoId);
               const horariosDisponibles = cursoSeleccionado?.horarios || [];
@@ -2916,7 +2946,7 @@ function AlumnoForm({ alumno, data, update, onSave, onClose }) {
                   <select
                     value={form.horarioCurso || ''}
                     onChange={e => set('horarioCurso', e.target.value)}
-                    className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 bg-white"
+                    className="w-full mt-1 px-3 py-2 rounded-lg border border-cream-200 bg-white"
                   >
                     <option value="">— Sin asignar / Por confirmar —</option>
                     {horariosDisponibles.map(h => <option key={h} value={h}>{h}</option>)}
@@ -2927,7 +2957,7 @@ function AlumnoForm({ alumno, data, update, onSave, onClose }) {
                   {horariosDisponibles.length === 0 ? (
                     <p className="text-xs text-amber-600 mt-1">Este curso aún no tiene horarios cargados. Podés cargarlos en la pestaña Cursos → Editar curso.</p>
                   ) : (
-                    <p className="text-xs text-stone-400 mt-1">Si todavía no se confirmó el horario, dejalo en "Sin asignar" y completalo después.</p>
+                    <p className="text-xs text-cream-400 mt-1">Si todavía no se confirmó el horario, dejalo en "Sin asignar" y completalo después.</p>
                   )}
                 </>
               );
@@ -2935,17 +2965,17 @@ function AlumnoForm({ alumno, data, update, onSave, onClose }) {
           </div>
 
           <div>
-            <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Grupo familiar (hermanos)</label>
+            <label className="text-xs text-cream-500 font-medium uppercase tracking-wider">Grupo familiar (hermanos)</label>
             <div className="flex gap-2 mt-1">
               <select
                 value={form.grupoFamiliarId || ''}
                 onChange={e => set('grupoFamiliarId', e.target.value || null)}
-                className="flex-1 px-3 py-2 rounded-lg border border-stone-200 bg-white"
+                className="flex-1 px-3 py-2 rounded-lg border border-cream-200 bg-white"
               >
                 <option value="">— Sin grupo —</option>
                 {data.gruposFamiliares.map(g => <option key={g.id} value={g.id}>{g.nombre}</option>)}
               </select>
-              <button onClick={() => setShowNuevoGrupo(true)} className="px-3 py-2 rounded-lg border border-stone-200 text-sm hover:bg-stone-50">
+              <button onClick={() => setShowNuevoGrupo(true)} className="px-3 py-2 rounded-lg border border-cream-200 text-sm hover:bg-cream-50">
                 <Plus size={16} />
               </button>
             </div>
@@ -2956,40 +2986,41 @@ function AlumnoForm({ alumno, data, update, onSave, onClose }) {
                   value={nuevoGrupoNombre}
                   onChange={e => setNuevoGrupoNombre(e.target.value)}
                   placeholder="Nombre del grupo (ej: Familia García)"
-                  className="flex-1 px-3 py-2 rounded-lg border border-stone-200"
+                  className="flex-1 px-3 py-2 rounded-lg border border-cream-200"
                 />
-                <button onClick={crearGrupo} className="px-3 py-2 bg-emerald-700 text-white rounded-lg text-sm">Crear</button>
-                <button onClick={() => setShowNuevoGrupo(false)} className="px-3 py-2 text-stone-500 text-sm">Cancelar</button>
+                <button onClick={crearGrupo} className="px-3 py-2 bg-brand-600 text-white rounded-lg text-sm">Crear</button>
+                <button onClick={() => setShowNuevoGrupo(false)} className="px-3 py-2 text-cream-500 text-sm">Cancelar</button>
               </div>
             )}
-            <p className="text-xs text-stone-400 mt-1">
+            <p className="text-xs text-cream-400 mt-1">
               Asociá hermanos al mismo grupo. Si configuraste descuento, se aplicará automáticamente. Si tienen el mismo celular, recibirán un solo WhatsApp al cobrar varios.
             </p>
           </div>
 
           <div>
-            <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Observaciones</label>
+            <label className="text-xs text-cream-500 font-medium uppercase tracking-wider">Observaciones</label>
             <textarea
               value={form.observaciones}
               onChange={e => set('observaciones', e.target.value)}
               rows={2}
-              className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 bg-white text-sm"
+              className="w-full mt-1 px-3 py-2 rounded-lg border border-cream-200 bg-white text-sm"
             />
           </div>
 
-          <div className="flex gap-2 pt-4 border-t border-stone-200">
-            <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-lg border border-stone-200 hover:bg-stone-50 font-medium text-sm">Cancelar</button>
-            <button
+          <div className="flex gap-2 pt-4 border-t border-cream-200">
+            <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-lg border border-cream-200 hover:bg-cream-50 font-medium text-sm">Cancelar</button>
+            <motion.button
+              whileTap={{ scale: 0.96 }}
               onClick={() => onSave(form)}
               disabled={!form.nombre || !form.apellido}
-              className="flex-1 px-4 py-2.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-medium text-sm disabled:opacity-50"
+              className="flex-1 px-4 py-2.5 rounded-lg bg-gradient-to-b from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 shadow-md shadow-brand-600/25 text-white font-medium text-sm disabled:opacity-50"
             >
               Guardar
-            </button>
+            </motion.button>
           </div>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }
 
@@ -3081,17 +3112,17 @@ function AlumnoCuotasModal({ alumno, data, update, onClose, onEdit }) {
     <>
       <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center p-4 overflow-y-auto">
         <div className="bg-white rounded-2xl max-w-2xl w-full my-8">
-          <div className="sticky top-0 bg-white border-b border-stone-200 px-6 py-4 flex items-center justify-between rounded-t-2xl">
+          <div className="sticky top-0 bg-white border-b border-cream-200 px-6 py-4 flex items-center justify-between rounded-t-2xl">
             <h2 className="font-semibold">Cuotas de {fullName(alumno)}</h2>
-            <button onClick={onClose} className="text-stone-400 hover:text-stone-700"><X size={20} /></button>
+            <button onClick={onClose} className="text-cream-400 hover:text-cream-700"><X size={20} /></button>
           </div>
           <div className="p-6 space-y-4">
             <div className="flex items-center gap-3">
-              <span className="text-xs uppercase tracking-wider text-stone-500">Año:</span>
+              <span className="text-xs uppercase tracking-wider text-cream-500">Año:</span>
               <select
                 value={anio}
                 onChange={e => { setAnio(Number(e.target.value)); setSelectedPeriodos([]); }}
-                className="px-3 py-1.5 rounded-lg border border-stone-200 bg-white text-sm"
+                className="px-3 py-1.5 rounded-lg border border-cream-200 bg-white text-sm"
               >
                 {[2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
               </select>
@@ -3111,14 +3142,14 @@ function AlumnoCuotasModal({ alumno, data, update, onClose, onEdit }) {
               <div className="flex gap-2">
                 <button
                   onClick={() => setShowCalcularModal(true)}
-                  className="px-4 py-3 rounded-xl border border-stone-300 text-stone-700 hover:bg-stone-50 font-medium text-sm flex items-center justify-center gap-2"
+                  className="px-4 py-3 rounded-xl border border-cream-300 text-cream-700 hover:bg-cream-50 font-medium text-sm flex items-center justify-center gap-2"
                 >
                   <Calculator size={16} />
                   Calcular importe
                 </button>
                 <button
                   onClick={() => setShowPaymentModal(true)}
-                  className="flex-1 bg-emerald-700 hover:bg-emerald-800 text-white px-6 py-3 rounded-xl font-medium flex items-center justify-center gap-2"
+                  className="flex-1 bg-gradient-to-b from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 shadow-md shadow-brand-600/25 text-white px-6 py-3 rounded-xl font-medium flex items-center justify-center gap-2"
                 >
                   <DollarSign size={18} />
                   Cobrar {selectedPeriodos.length} {selectedPeriodos.length === 1 ? 'cuota' : 'cuotas'}
@@ -3197,7 +3228,7 @@ function CompletarCelularCard({ alumno, total, onGuardar }) {
     <div className="border border-amber-200 bg-amber-50/50 rounded-xl p-4 space-y-2">
       <div className="flex items-center justify-between">
         <div className="font-medium text-sm">{alumno.nombre}</div>
-        <div className="text-xs text-stone-500">Total: {fmtMoney(total)}</div>
+        <div className="text-xs text-cream-500">Total: {fmtMoney(total)}</div>
       </div>
       <p className="text-xs text-amber-700">No tiene celular cargado. Completalo para armar el mensaje:</p>
       <div className="grid grid-cols-2 gap-2">
@@ -3219,7 +3250,7 @@ function CompletarCelularCard({ alumno, total, onGuardar }) {
       <button
         onClick={() => celular.trim() && onGuardar(celular.trim(), contacto.trim())}
         disabled={!celular.trim()}
-        className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-medium disabled:opacity-50"
+        className="px-3 py-1.5 bg-gradient-to-b from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 shadow-md shadow-brand-600/25 text-white rounded-lg text-xs font-medium disabled:opacity-50"
       >
         Guardar y armar mensaje
       </button>
@@ -3235,21 +3266,21 @@ function DarDeAltaModal({ alumno, onConfirm, onClose }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl max-w-sm w-full">
-        <div className="border-b border-stone-200 px-6 py-4 flex items-center justify-between">
+        <div className="border-b border-cream-200 px-6 py-4 flex items-center justify-between">
           <h2 className="font-semibold">Dar de alta a {fullName(alumno)}</h2>
           <button onClick={onClose}><X size={20} /></button>
         </div>
         <div className="p-6 space-y-4">
           <Field label="Fecha de alta" type="date" value={fecha} onChange={setFecha} />
-          <p className="text-xs text-stone-500">
+          <p className="text-xs text-cream-500">
             Las cuotas de los meses anteriores a esta fecha no van a figurar como adeudadas para este alumno.
           </p>
           <div className="flex gap-2 pt-2">
-            <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-lg border border-stone-200 hover:bg-stone-50 font-medium text-sm">Cancelar</button>
+            <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-lg border border-cream-200 hover:bg-cream-50 font-medium text-sm">Cancelar</button>
             <button
               onClick={() => onConfirm(fecha)}
               disabled={!fecha}
-              className="flex-1 px-4 py-2.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-medium text-sm disabled:opacity-50"
+              className="flex-1 px-4 py-2.5 rounded-lg bg-gradient-to-b from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 shadow-md shadow-brand-600/25 text-white font-medium text-sm disabled:opacity-50"
             >
               Confirmar alta
             </button>
@@ -3271,7 +3302,7 @@ function QuickCompleteModal({ alumno, data, onSave, onClose }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl max-w-sm w-full">
-        <div className="border-b border-stone-200 px-6 py-4 flex items-center justify-between">
+        <div className="border-b border-cream-200 px-6 py-4 flex items-center justify-between">
           <h2 className="font-semibold">Completar datos — {fullName(alumno)}</h2>
           <button onClick={onClose}><X size={20} /></button>
         </div>
@@ -3281,11 +3312,11 @@ function QuickCompleteModal({ alumno, data, onSave, onClose }) {
           )}
           {faltantes.includes('curso') && (
             <div>
-              <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Curso</label>
+              <label className="text-xs text-cream-500 font-medium uppercase tracking-wider">Curso</label>
               <select
                 value={cursoId}
                 onChange={e => setCursoId(e.target.value)}
-                className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 bg-white"
+                className="w-full mt-1 px-3 py-2 rounded-lg border border-cream-200 bg-white"
               >
                 <option value="">— Sin asignar —</option>
                 {data.cursos.filter(c => c.activo).map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
@@ -3296,8 +3327,8 @@ function QuickCompleteModal({ alumno, data, onSave, onClose }) {
             <Field label="Fecha de nacimiento" type="date" value={fechaNacimiento} onChange={setFechaNacimiento} />
           )}
           <div className="flex gap-2 pt-2">
-            <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-lg border border-stone-200 hover:bg-stone-50 font-medium text-sm">Cancelar</button>
-            <button onClick={guardar} className="flex-1 px-4 py-2.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-medium text-sm">Guardar</button>
+            <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-lg border border-cream-200 hover:bg-cream-50 font-medium text-sm">Cancelar</button>
+            <button onClick={guardar} className="flex-1 px-4 py-2.5 rounded-lg bg-gradient-to-b from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 shadow-md shadow-brand-600/25 text-white font-medium text-sm">Guardar</button>
           </div>
         </div>
       </div>
@@ -3308,14 +3339,14 @@ function QuickCompleteModal({ alumno, data, onSave, onClose }) {
 function Field({ label, value, onChange, type = 'text', hint }) {
   return (
     <div>
-      <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">{label}</label>
+      <label className="text-xs text-cream-500 font-medium uppercase tracking-wider">{label}</label>
       <input
         type={type}
         value={value || ''}
         onChange={e => onChange(e.target.value)}
-        className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+        className="w-full mt-1 px-3 py-2 rounded-lg border border-cream-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
       />
-      {hint && <p className="text-xs text-stone-400 mt-1">{hint}</p>}
+      {hint && <p className="text-xs text-cream-400 mt-1">{hint}</p>}
     </div>
   );
 }
@@ -3326,8 +3357,8 @@ function FilterChip({ active, onClick, children }) {
       onClick={onClick}
       className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
         active
-          ? 'bg-emerald-700 text-white'
-          : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+          ? 'bg-brand-600 text-white'
+          : 'bg-cream-100 text-cream-700 hover:bg-cream-200'
       }`}
     >
       {children}
@@ -3497,7 +3528,7 @@ function ParticularesTab({ data, update }) {
 
   const ESTADOS_SESION = {
     asistio: { label: 'Asistió', badgeClass: 'bg-emerald-50 text-emerald-700' },
-    cancelado_aviso: { label: 'Canceló con aviso', badgeClass: 'bg-stone-100 text-stone-600' },
+    cancelado_aviso: { label: 'Canceló con aviso', badgeClass: 'bg-cream-100 text-cream-600' },
     no_show: { label: 'Faltó sin avisar', badgeClass: 'bg-amber-50 text-amber-700' }
   };
 
@@ -3561,22 +3592,22 @@ function ParticularesTab({ data, update }) {
 
   return (
     <div className="space-y-4">
-      <div className="bg-white rounded-2xl border border-stone-200 p-6 space-y-4">
+      <div className="bg-white rounded-2xl border border-cream-200 p-6 space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
             <h2 className="font-semibold">Alumnos particulares</h2>
-            <p className="text-sm text-stone-500 mt-0.5">Clases individuales con profe o con nativo (orales)</p>
+            <p className="text-sm text-cream-500 mt-0.5">Clases individuales con profe o con nativo (orales)</p>
           </div>
-          <div className="flex gap-1 border border-stone-200 rounded-lg p-1">
+          <div className="flex gap-1 border border-cream-200 rounded-lg p-1">
             <button
               onClick={() => setSubView('lista')}
-              className={`px-3 py-1.5 text-sm font-medium rounded-md ${subView === 'lista' ? 'bg-emerald-700 text-white' : 'text-stone-600 hover:bg-stone-100'}`}
+              className={`px-3 py-1.5 text-sm font-medium rounded-md ${subView === 'lista' ? 'bg-brand-600 text-white' : 'text-cream-600 hover:bg-cream-100'}`}
             >
               Lista
             </button>
             <button
               onClick={() => setSubView('agenda')}
-              className={`px-3 py-1.5 text-sm font-medium rounded-md ${subView === 'agenda' ? 'bg-emerald-700 text-white' : 'text-stone-600 hover:bg-stone-100'}`}
+              className={`px-3 py-1.5 text-sm font-medium rounded-md ${subView === 'agenda' ? 'bg-brand-600 text-white' : 'text-cream-600 hover:bg-cream-100'}`}
             >
               Agenda por profe
             </button>
@@ -3586,18 +3617,18 @@ function ParticularesTab({ data, update }) {
         {subView === 'lista' && (
           <div className="flex items-center gap-3">
             <div className="relative flex-1">
-              <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400" />
+              <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-cream-400" />
               <input
                 type="text"
                 value={query}
                 onChange={e => setQuery(e.target.value)}
                 placeholder="Buscar por alumno o profesor..."
-                className="w-full pl-11 pr-4 py-3 rounded-xl border border-stone-200 bg-white"
+                className="w-full pl-11 pr-4 py-3 rounded-xl border border-cream-200 bg-white"
               />
             </div>
             <button
               onClick={() => setEditing('new')}
-              className="bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-3 rounded-xl font-medium flex items-center gap-2 whitespace-nowrap"
+              className="bg-gradient-to-b from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 shadow-md shadow-brand-600/25 text-white px-4 py-3 rounded-xl font-medium flex items-center gap-2 whitespace-nowrap"
             >
               <Plus size={18} /> Nuevo particular
             </button>
@@ -3606,18 +3637,18 @@ function ParticularesTab({ data, update }) {
       </div>
 
       {subView === 'lista' && (
-        <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden">
+        <div className="bg-white rounded-2xl border border-cream-200 overflow-hidden">
           {filtered.length === 0 ? (
-            <div className="p-12 text-center text-stone-400 text-sm">
+            <div className="p-12 text-center text-cream-400 text-sm">
               {particulares.length === 0 ? 'No hay alumnos particulares cargados todavía' : 'Sin resultados'}
             </div>
           ) : (
-            <div className="divide-y divide-stone-100">
+            <div className="divide-y divide-cream-100">
               {filtered.map(p => {
                 const superpuesto = seSuperpone(p);
                 const { saldo, pendientes } = estadoCuentaParticular(p, data.configuracion);
                 return (
-                  <div key={p.id} className={`flex items-center gap-3 px-5 py-3 hover:bg-stone-50 ${!p.activo ? 'opacity-50' : ''}`}>
+                  <div key={p.id} className={`flex items-center gap-3 px-5 py-3 hover:bg-cream-50 ${!p.activo ? 'opacity-50' : ''}`}>
                     <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${p.modalidad === 'nativo' ? 'bg-sky-100 text-sky-700' : 'bg-emerald-100 text-emerald-700'}`}>
                       <Clock size={16} />
                     </div>
@@ -3637,9 +3668,9 @@ function ParticularesTab({ data, update }) {
                             Debe {fmtMoney(saldo)} ({pendientes.length} clase{pendientes.length !== 1 ? 's' : ''})
                           </span>
                         )}
-                        {!p.activo && <span className="text-xs px-1.5 py-0.5 bg-stone-200 text-stone-600 rounded">Inactivo</span>}
+                        {!p.activo && <span className="text-xs px-1.5 py-0.5 bg-cream-200 text-cream-600 rounded">Inactivo</span>}
                       </div>
-                      <div className="text-xs text-stone-500 truncate">
+                      <div className="text-xs text-cream-500 truncate">
                         {p.profesor || 'Sin asignar'} · {p.dia || 'Sin día'} {p.horaInicio || ''} · {p.duracionMin || 60} min
                         {p.celular && <> · {p.celular}</>}
                       </div>
@@ -3652,15 +3683,15 @@ function ParticularesTab({ data, update }) {
                     </button>
                     <button
                       onClick={() => enviarWA(p)}
-                      className="p-2 text-stone-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg"
+                      className="p-2 text-cream-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg"
                       title="Avisar clase agendada por WhatsApp"
                     >
                       <MessageCircle size={16} />
                     </button>
-                    <button onClick={() => setEditing(p)} className="p-2 text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-lg">
+                    <button onClick={() => setEditing(p)} className="p-2 text-cream-400 hover:text-cream-700 hover:bg-cream-100 rounded-lg">
                       <Edit2 size={16} />
                     </button>
-                    <button onClick={() => eliminar(p.id)} className="p-2 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
+                    <button onClick={() => eliminar(p.id)} className="p-2 text-cream-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
                       <Trash2 size={16} />
                     </button>
                   </div>
@@ -3673,7 +3704,7 @@ function ParticularesTab({ data, update }) {
 
       {subView === 'agenda' && (
         profesores.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-stone-200 p-12 text-center text-stone-400 text-sm">
+          <div className="bg-white rounded-2xl border border-cream-200 p-12 text-center text-cream-400 text-sm">
             Cargá algún alumno particular con profesor asignado para ver la agenda
           </div>
         ) : (
@@ -3681,11 +3712,11 @@ function ParticularesTab({ data, update }) {
             {profesores.map(profesor => {
               const deEsteProfesor = particulares.filter(p => p.profesor === profesor && p.activo);
               return (
-                <div key={profesor} className="bg-white rounded-2xl border border-stone-200 overflow-hidden">
-                  <div className="px-6 py-4 border-b border-stone-100 bg-stone-50/60 flex items-center gap-2">
-                    <Clock size={16} className="text-stone-400" />
-                    <span className="font-semibold text-stone-900">{profesor}</span>
-                    <span className="text-xs text-stone-500 bg-stone-200 px-2 py-0.5 rounded-full">{deEsteProfesor.length} clases/semana</span>
+                <div key={profesor} className="bg-white rounded-2xl border border-cream-200 overflow-hidden">
+                  <div className="px-6 py-4 border-b border-cream-100 bg-cream-50/60 flex items-center gap-2">
+                    <Clock size={16} className="text-cream-400" />
+                    <span className="font-semibold text-cream-900">{profesor}</span>
+                    <span className="text-xs text-cream-500 bg-cream-200 px-2 py-0.5 rounded-full">{deEsteProfesor.length} clases/semana</span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-5">
                     {DIAS_SEMANA.map(dia => {
@@ -3694,13 +3725,13 @@ function ParticularesTab({ data, update }) {
                         .sort((a, b) => horaAMinutos(a.horaInicio) - horaAMinutos(b.horaInicio));
                       if (slots.length === 0) return null;
                       return (
-                        <div key={dia} className="border border-stone-200 rounded-xl p-3">
-                          <div className="text-xs uppercase tracking-wider text-stone-500 font-medium mb-2">{dia}</div>
+                        <div key={dia} className="border border-cream-200 rounded-xl p-3">
+                          <div className="text-xs uppercase tracking-wider text-cream-500 font-medium mb-2">{dia}</div>
                           <div className="space-y-1.5">
                             {slots.map(s => (
-                              <div key={s.id} className={`text-sm px-2.5 py-1.5 rounded-lg ${seSuperpone(s) ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-stone-50 text-stone-700'}`}>
+                              <div key={s.id} className={`text-sm px-2.5 py-1.5 rounded-lg ${seSuperpone(s) ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-cream-50 text-cream-700'}`}>
                                 <span className="font-medium">{s.horaInicio}</span> · {s.nombre}
-                                <span className="text-xs text-stone-400"> ({s.duracionMin || 60}min{s.modalidad === 'nativo' ? ' · nativo' : ''})</span>
+                                <span className="text-xs text-cream-400"> ({s.duracionMin || 60}min{s.modalidad === 'nativo' ? ' · nativo' : ''})</span>
                               </div>
                             ))}
                           </div>
@@ -3766,28 +3797,28 @@ function ParticularPerfilModal({ particular: p, configuracion, estadosSesion, on
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 overflow-y-auto">
       <div className="bg-white rounded-2xl max-w-lg w-full my-8 max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white border-b border-stone-200 px-6 py-4 flex items-center justify-between">
+        <div className="sticky top-0 bg-white border-b border-cream-200 px-6 py-4 flex items-center justify-between">
           <div>
             <h2 className="font-semibold text-lg">{p.nombre}</h2>
-            <p className="text-xs text-stone-500 mt-0.5">
+            <p className="text-xs text-cream-500 mt-0.5">
               {p.profesor || 'Sin profesor'} · {p.dia || 'Sin día'} {p.horaInicio || ''} · {p.duracionMin || 60} min
             </p>
           </div>
-          <button onClick={onClose} className="text-stone-400 hover:text-stone-700"><X size={20} /></button>
+          <button onClick={onClose} className="text-cream-400 hover:text-cream-700"><X size={20} /></button>
         </div>
 
         <div className="p-6 space-y-5">
           <div className={`rounded-xl p-4 border ${saldo > 0 ? 'bg-red-50 border-red-200' : 'bg-emerald-50 border-emerald-200'}`}>
             <div className="flex items-center justify-between flex-wrap gap-2">
               <div>
-                <label className="text-xs font-medium uppercase tracking-wider text-stone-500">Cuenta corriente</label>
+                <label className="text-xs font-medium uppercase tracking-wider text-cream-500">Cuenta corriente</label>
                 <p className={`text-xl font-semibold mt-0.5 ${saldo > 0 ? 'text-red-700' : 'text-emerald-700'}`}>
                   {saldo > 0 ? `Debe ${fmtMoney(saldo)}` : aFavor > 0 ? `A favor ${fmtMoney(aFavor)}` : 'Al día'}
                 </p>
               </div>
               <button
                 onClick={() => setPagando(v => !v)}
-                className="text-sm px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg font-medium"
+                className="text-sm px-3 py-1.5 bg-gradient-to-b from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 shadow-md shadow-brand-600/25 text-white rounded-lg font-medium"
               >
                 Registrar un pago
               </button>
@@ -3796,25 +3827,25 @@ function ParticularPerfilModal({ particular: p, configuracion, estadosSesion, on
             {pagando && (
               <div className="flex items-end gap-2 mt-3 flex-wrap">
                 <div>
-                  <label className="text-xs text-stone-500">Monto</label>
+                  <label className="text-xs text-cream-500">Monto</label>
                   <input
                     type="number"
                     value={montoPago}
                     onChange={e => setMontoPago(e.target.value)}
                     placeholder="$"
-                    className="w-28 mt-0.5 px-2 py-1.5 rounded-lg border border-stone-200 bg-white text-sm"
+                    className="w-28 mt-0.5 px-2 py-1.5 rounded-lg border border-cream-200 bg-white text-sm"
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-stone-500">Fecha</label>
+                  <label className="text-xs text-cream-500">Fecha</label>
                   <input
                     type="date"
                     value={fechaPago}
                     onChange={e => setFechaPago(e.target.value)}
-                    className="mt-0.5 px-2 py-1.5 rounded-lg border border-stone-200 bg-white text-sm"
+                    className="mt-0.5 px-2 py-1.5 rounded-lg border border-cream-200 bg-white text-sm"
                   />
                 </div>
-                <button onClick={guardarPago} className="text-sm px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg font-medium">
+                <button onClick={guardarPago} className="text-sm px-3 py-1.5 bg-gradient-to-b from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 shadow-md shadow-brand-600/25 text-white rounded-lg font-medium">
                   Guardar
                 </button>
               </div>
@@ -3829,7 +3860,7 @@ function ParticularPerfilModal({ particular: p, configuracion, estadosSesion, on
                 ))}
                 <button
                   onClick={onReclamar}
-                  className="text-xs px-2 py-0.5 bg-stone-700 hover:bg-stone-800 text-white rounded-full flex items-center gap-1"
+                  className="text-xs px-2 py-0.5 bg-cream-700 hover:bg-cream-800 text-white rounded-full flex items-center gap-1"
                 >
                   <MessageCircle size={11} /> Reclamar por WhatsApp
                 </button>
@@ -3838,18 +3869,18 @@ function ParticularPerfilModal({ particular: p, configuracion, estadosSesion, on
           </div>
 
           <div>
-            <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Registrar una clase</label>
-            <p className="text-xs text-stone-400 mt-0.5 mb-2">
+            <label className="text-xs text-cream-500 font-medium uppercase tracking-wider">Registrar una clase</label>
+            <p className="text-xs text-cream-400 mt-0.5 mb-2">
               Por defecto sugiere la fecha de esta semana, pero podés elegir cualquier otra (por si ese horario cambió puntualmente).
             </p>
             <input
               type="date"
               value={fechaElegida}
               onChange={e => setFechaElegida(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-stone-200 bg-white text-sm mb-2"
+              className="w-full px-3 py-2 rounded-lg border border-cream-200 bg-white text-sm mb-2"
             />
             {entrada ? (
-              <div className="flex items-center gap-2 flex-wrap bg-stone-50 border border-stone-200 rounded-lg p-3">
+              <div className="flex items-center gap-2 flex-wrap bg-cream-50 border border-cream-200 rounded-lg p-3">
                 <span className={`text-xs px-2 py-1 rounded ${estadosSesion[entrada.estado].badgeClass}`}>
                   {estadosSesion[entrada.estado].label}
                 </span>
@@ -3860,7 +3891,7 @@ function ParticularPerfilModal({ particular: p, configuracion, estadosSesion, on
                 )}
                 <button
                   onClick={() => onQuitar(fechaElegida)}
-                  className="text-xs px-2 py-1 text-stone-500 hover:text-red-600 hover:bg-red-50 rounded-lg ml-auto"
+                  className="text-xs px-2 py-1 text-cream-500 hover:text-red-600 hover:bg-red-50 rounded-lg ml-auto"
                 >
                   Borrar registro
                 </button>
@@ -3875,7 +3906,7 @@ function ParticularPerfilModal({ particular: p, configuracion, estadosSesion, on
                 </button>
                 <button
                   onClick={() => onRegistrar(fechaElegida, 'cancelado_aviso')}
-                  className="text-xs px-3 py-1.5 bg-stone-200 text-stone-700 hover:bg-stone-300 rounded-lg font-medium"
+                  className="text-xs px-3 py-1.5 bg-cream-200 text-cream-700 hover:bg-cream-300 rounded-lg font-medium"
                 >
                   Canceló con aviso
                 </button>
@@ -3890,19 +3921,19 @@ function ParticularPerfilModal({ particular: p, configuracion, estadosSesion, on
           </div>
 
           <div>
-            <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Pagos registrados ({pagos.length})</label>
+            <label className="text-xs text-cream-500 font-medium uppercase tracking-wider">Pagos registrados ({pagos.length})</label>
             {pagos.length === 0 ? (
-              <p className="text-xs text-stone-400 mt-2">Sin pagos registrados todavía.</p>
+              <p className="text-xs text-cream-400 mt-2">Sin pagos registrados todavía.</p>
             ) : (
               <div className="mt-2 flex flex-col gap-1.5">
                 {[...pagos].sort((a, b) => b.fecha.localeCompare(a.fecha)).map(pg => (
                   <div key={pg.id} className="flex items-center gap-2 text-xs">
-                    <span className="font-medium text-stone-700 w-10">{fmtFechaCorta(pg.fecha)}</span>
+                    <span className="font-medium text-cream-700 w-10">{fmtFechaCorta(pg.fecha)}</span>
                     <span className="text-emerald-700 font-medium">{fmtMoney(pg.monto)}</span>
                     <button
                       onClick={() => onQuitarPago(pg.id)}
                       title="Quitar este pago (si se cargó por error)"
-                      className="text-stone-300 hover:text-red-500 ml-auto"
+                      className="text-cream-300 hover:text-red-500 ml-auto"
                     >
                       <Trash2 size={12} />
                     </button>
@@ -3913,16 +3944,16 @@ function ParticularPerfilModal({ particular: p, configuracion, estadosSesion, on
           </div>
 
           <div>
-            <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Historial de clases ({historial.length})</label>
+            <label className="text-xs text-cream-500 font-medium uppercase tracking-wider">Historial de clases ({historial.length})</label>
             {historial.length === 0 ? (
-              <p className="text-xs text-stone-400 mt-2">Sin clases registradas todavía.</p>
+              <p className="text-xs text-cream-400 mt-2">Sin clases registradas todavía.</p>
             ) : (
               <div className="mt-2 flex flex-col gap-1.5">
                 {[...historial].sort((a, b) => b.fecha.localeCompare(a.fecha)).map(h => {
                   const info = estadosSesion[h.estado];
                   return (
                     <div key={h.fecha} className="flex items-center gap-2 text-xs">
-                      <span className="font-medium text-stone-700 w-10">{fmtFechaCorta(h.fecha)}</span>
+                      <span className="font-medium text-cream-700 w-10">{fmtFechaCorta(h.fecha)}</span>
                       <span className={`px-1.5 py-0.5 rounded ${info.badgeClass}`}>{info.label}</span>
                       {h.estado !== 'cancelado_aviso' && (
                         <span className={pendientesSet.has(h.fecha) ? 'text-red-600' : 'text-emerald-600'}>
@@ -3932,7 +3963,7 @@ function ParticularPerfilModal({ particular: p, configuracion, estadosSesion, on
                       <button
                         onClick={() => onQuitar(h.fecha)}
                         title="Quitar este registro (si se cargó por error)"
-                        className="text-stone-300 hover:text-red-500 ml-auto"
+                        className="text-cream-300 hover:text-red-500 ml-auto"
                       >
                         <Trash2 size={12} />
                       </button>
@@ -3943,7 +3974,7 @@ function ParticularPerfilModal({ particular: p, configuracion, estadosSesion, on
             )}
           </div>
 
-          <button onClick={onClose} className="w-full px-4 py-2.5 rounded-lg border border-stone-200 hover:bg-stone-50 font-medium text-sm">
+          <button onClick={onClose} className="w-full px-4 py-2.5 rounded-lg border border-cream-200 hover:bg-cream-50 font-medium text-sm">
             Cerrar
           </button>
         </div>
@@ -3961,23 +3992,23 @@ function ParticularForm({ particular, profesoresExistentes, onSave, onClose }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 overflow-y-auto">
       <div className="bg-white rounded-2xl max-w-md w-full my-8 max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white border-b border-stone-200 px-6 py-4 flex items-center justify-between">
+        <div className="sticky top-0 bg-white border-b border-cream-200 px-6 py-4 flex items-center justify-between">
           <h2 className="font-semibold text-lg">{particular ? 'Editar particular' : 'Nuevo alumno particular'}</h2>
-          <button onClick={onClose} className="text-stone-400 hover:text-stone-700"><X size={20} /></button>
+          <button onClick={onClose} className="text-cream-400 hover:text-cream-700"><X size={20} /></button>
         </div>
         <div className="p-6 space-y-4">
           <Field label="Nombre" value={form.nombre} onChange={v => set('nombre', v)} />
           <Field label="Celular (opcional)" value={form.celular} onChange={v => set('celular', v)} hint="Sin 0 ni 15" />
 
           <div>
-            <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Modalidad</label>
+            <label className="text-xs text-cream-500 font-medium uppercase tracking-wider">Modalidad</label>
             <div className="flex gap-2 mt-1">
               {[{ id: 'profe', label: 'Con profesor' }, { id: 'nativo', label: 'Nativo (oral)' }].map(m => (
                 <button
                   key={m.id}
                   onClick={() => set('modalidad', m.id)}
                   className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border ${
-                    form.modalidad === m.id ? 'bg-emerald-700 text-white border-emerald-700' : 'border-stone-200 text-stone-600 hover:bg-stone-50'
+                    form.modalidad === m.id ? 'bg-brand-600 text-white border-brand-600' : 'border-cream-200 text-cream-600 hover:bg-cream-50'
                   }`}
                 >
                   {m.label}
@@ -3987,48 +4018,48 @@ function ParticularForm({ particular, profesoresExistentes, onSave, onClose }) {
           </div>
 
           <div>
-            <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Profesor</label>
+            <label className="text-xs text-cream-500 font-medium uppercase tracking-wider">Profesor</label>
             <input
               type="text"
               list="profesores-existentes"
               value={form.profesor}
               onChange={e => set('profesor', e.target.value)}
-              className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+              className="w-full mt-1 px-3 py-2 rounded-lg border border-cream-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
             />
             <datalist id="profesores-existentes">
               {(profesoresExistentes || []).map(p => <option key={p} value={p} />)}
             </datalist>
-            <p className="text-xs text-stone-400 mt-1">Nombre del profe o del nativo a cargo. Empezá a escribir para elegir uno ya cargado.</p>
+            <p className="text-xs text-cream-400 mt-1">Nombre del profe o del nativo a cargo. Empezá a escribir para elegir uno ya cargado.</p>
           </div>
 
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Día</label>
+              <label className="text-xs text-cream-500 font-medium uppercase tracking-wider">Día</label>
               <select
                 value={form.dia}
                 onChange={e => set('dia', e.target.value)}
-                className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 bg-white text-sm"
+                className="w-full mt-1 px-3 py-2 rounded-lg border border-cream-200 bg-white text-sm"
               >
                 {DIAS_SEMANA.map(d => <option key={d} value={d}>{d}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Hora</label>
+              <label className="text-xs text-cream-500 font-medium uppercase tracking-wider">Hora</label>
               <select
                 value={form.horaInicio}
                 onChange={e => set('horaInicio', e.target.value)}
-                className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 bg-white text-sm"
+                className="w-full mt-1 px-3 py-2 rounded-lg border border-cream-200 bg-white text-sm"
               >
                 <option value="">— Elegir —</option>
                 {HORARIOS_15MIN.map(h => <option key={h} value={h}>{h}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Duración</label>
+              <label className="text-xs text-cream-500 font-medium uppercase tracking-wider">Duración</label>
               <select
                 value={form.duracionMin}
                 onChange={e => set('duracionMin', Number(e.target.value))}
-                className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 bg-white text-sm"
+                className="w-full mt-1 px-3 py-2 rounded-lg border border-cream-200 bg-white text-sm"
               >
                 <option value={30}>30 min</option>
                 <option value={60}>60 min</option>
@@ -4037,21 +4068,21 @@ function ParticularForm({ particular, profesoresExistentes, onSave, onClose }) {
           </div>
 
           <div>
-            <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Observaciones</label>
+            <label className="text-xs text-cream-500 font-medium uppercase tracking-wider">Observaciones</label>
             <textarea
               value={form.observaciones}
               onChange={e => set('observaciones', e.target.value)}
               rows={2}
-              className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 bg-white text-sm"
+              className="w-full mt-1 px-3 py-2 rounded-lg border border-cream-200 bg-white text-sm"
             />
           </div>
 
-          <div className="flex gap-2 pt-4 border-t border-stone-200">
-            <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-lg border border-stone-200 hover:bg-stone-50 font-medium text-sm">Cancelar</button>
+          <div className="flex gap-2 pt-4 border-t border-cream-200">
+            <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-lg border border-cream-200 hover:bg-cream-50 font-medium text-sm">Cancelar</button>
             <button
               onClick={() => onSave(form)}
               disabled={!form.nombre || !form.profesor || !form.horaInicio}
-              className="flex-1 px-4 py-2.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-medium text-sm disabled:opacity-50"
+              className="flex-1 px-4 py-2.5 rounded-lg bg-gradient-to-b from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 shadow-md shadow-brand-600/25 text-white font-medium text-sm disabled:opacity-50"
             >
               Guardar
             </button>
@@ -4104,16 +4135,16 @@ function CursosTab({ data, update }) {
 
   return (
     <div className="space-y-4">
-      <div className="bg-white rounded-2xl border border-stone-200 p-6 flex items-center justify-between">
+      <div className="bg-white rounded-2xl border border-cream-200 p-6 flex items-center justify-between">
         <div>
           <h2 className="font-semibold">Cursos y precios</h2>
-          <p className="text-sm text-stone-500 mt-0.5">Los precios se guardan con vigencia: actualizar precios no modifica cuotas anteriores</p>
+          <p className="text-sm text-cream-500 mt-0.5">Los precios se guardan con vigencia: actualizar precios no modifica cuotas anteriores</p>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => setShowBulkPrice(true)} className="border border-emerald-700 text-emerald-700 hover:bg-emerald-50 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
+          <button onClick={() => setShowBulkPrice(true)} className="border border-brand-600 text-brand-600 hover:bg-brand-50 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
             <DollarSign size={16} /> Actualizar precios (todos los niveles)
           </button>
-          <button onClick={() => setEditingCurso({})} className="bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
+          <button onClick={() => setEditingCurso({})} className="bg-gradient-to-b from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 shadow-md shadow-brand-600/25 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
             <Plus size={16} /> Curso
           </button>
         </div>
@@ -4124,17 +4155,17 @@ function CursosTab({ data, update }) {
           const hoy = today();
           const precioMensual = buscarPrecioVigente(data.preciosCuotas, curso.id, 'MENSUAL', hoy);
           return (
-            <div key={curso.id} className={`bg-white rounded-2xl border border-stone-200 p-5 ${!curso.activo ? 'opacity-60' : ''}`}>
+            <div key={curso.id} className={`bg-white rounded-2xl border border-cream-200 p-5 ${!curso.activo ? 'opacity-60' : ''}`}>
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <h3 className="font-semibold">{curso.nombre}</h3>
-                  {!curso.activo && <span className="text-xs px-2 py-0.5 bg-stone-200 text-stone-600 rounded">Inactivo</span>}
+                  {!curso.activo && <span className="text-xs px-2 py-0.5 bg-cream-200 text-cream-600 rounded">Inactivo</span>}
                 </div>
                 <div className="flex gap-1">
-                  <button onClick={() => setEditingCurso(curso)} className="p-2 text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-lg">
+                  <button onClick={() => setEditingCurso(curso)} className="p-2 text-cream-400 hover:text-cream-700 hover:bg-cream-100 rounded-lg">
                     <Edit2 size={14} />
                   </button>
-                  <button onClick={() => toggleActivoCurso(curso.id)} className="p-2 text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-lg" title={curso.activo ? 'Desactivar' : 'Activar'}>
+                  <button onClick={() => toggleActivoCurso(curso.id)} className="p-2 text-cream-400 hover:text-cream-700 hover:bg-cream-100 rounded-lg" title={curso.activo ? 'Desactivar' : 'Activar'}>
                     {curso.activo ? <Trash2 size={14} /> : <Plus size={14} />}
                   </button>
                 </div>
@@ -4142,7 +4173,7 @@ function CursosTab({ data, update }) {
 
               <div>
                 <PrecioBox label="Cuota mensual" precio={precioMensual} />
-                <div className="text-xs text-stone-400 mt-2 italic">El examen usa automáticamente el precio mensual vigente en diciembre.</div>
+                <div className="text-xs text-cream-400 mt-2 italic">El examen usa automáticamente el precio mensual vigente en diciembre.</div>
               </div>
 
               <div className="flex items-center gap-2 mt-3">
@@ -4178,13 +4209,13 @@ function CursosTab({ data, update }) {
 
 function PrecioBox({ label, precio }) {
   if (!precio) return (
-    <div className="border border-dashed border-stone-200 rounded-lg p-3 text-center text-stone-400 text-xs">
+    <div className="border border-dashed border-cream-200 rounded-lg p-3 text-center text-cream-400 text-xs">
       {label}<br />Sin precio
     </div>
   );
   return (
-    <div className="border border-stone-200 rounded-lg p-3">
-      <div className="text-xs text-stone-500 uppercase tracking-wider">{label}</div>
+    <div className="border border-cream-200 rounded-lg p-3">
+      <div className="text-xs text-cream-500 uppercase tracking-wider">{label}</div>
       <div className="mt-1 space-y-0.5">
         <div className="text-sm">Ef: <span className="font-semibold">{fmtMoney(precio.efectivo)}</span></div>
         <div className="text-sm">Tr: <span className="font-semibold">{fmtMoney(precio.transferencia)}</span></div>
@@ -4228,25 +4259,25 @@ function PrecioHistory({ data, cursoId, onDelete }) {
 
   return (
     <div className="mt-3">
-      <button onClick={() => setOpen(!open)} className="text-xs text-stone-500 hover:text-stone-800 flex items-center gap-1">
+      <button onClick={() => setOpen(!open)} className="text-xs text-cream-500 hover:text-cream-800 flex items-center gap-1">
         <History size={12} /> {open ? 'Ocultar' : 'Ver'} historial de precios ({historial.length})
       </button>
       {open && (
-        <div className="mt-2 border-t border-stone-100 pt-3 space-y-3">
+        <div className="mt-2 border-t border-cream-100 pt-3 space-y-3">
           {Object.entries(porTipo).map(([tipo, arr]) => (
             <div key={tipo}>
-              <div className="text-xs font-medium uppercase tracking-wider text-stone-500 mb-1.5">{tipoLabel[tipo]}</div>
+              <div className="text-xs font-medium uppercase tracking-wider text-cream-500 mb-1.5">{tipoLabel[tipo]}</div>
               <div className="space-y-1">
                 {arr.map((p, idx) => (
-                  <div key={p.id} className={`text-xs flex items-center justify-between gap-2 px-2.5 py-1.5 rounded group ${idx === 0 ? 'bg-emerald-50/60' : 'bg-stone-50'}`}>
-                    <span className="text-stone-700 flex-1 min-w-0">
+                  <div key={p.id} className={`text-xs flex items-center justify-between gap-2 px-2.5 py-1.5 rounded group ${idx === 0 ? 'bg-emerald-50/60' : 'bg-cream-50'}`}>
+                    <span className="text-cream-700 flex-1 min-w-0">
                       {idx === 0 ? (
                         <><span className="text-emerald-700 font-medium">Vigente</span> desde {fmtFecha(p.vigenciaDesde)}</>
                       ) : (
                         <>Del {fmtFecha(p.vigenciaDesde)} al {fmtFecha(p._hasta)}</>
                       )}
                     </span>
-                    <span className="text-stone-600 whitespace-nowrap">
+                    <span className="text-cream-600 whitespace-nowrap">
                       Ef {fmtMoney(p.efectivo)} · Tr {fmtMoney(p.transferencia)}
                     </span>
                     {onDelete && (
@@ -4256,7 +4287,7 @@ function PrecioHistory({ data, cursoId, onDelete }) {
                             onDelete(p.id);
                           }
                         }}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded transition-opacity"
+                        className="opacity-0 group-hover:opacity-100 p-1 text-cream-400 hover:text-red-600 hover:bg-red-50 rounded transition-opacity"
                         title="Eliminar precio"
                       >
                         <Trash2 size={12} />
@@ -4280,24 +4311,24 @@ function CursoAlumnosToggle({ curso, data }) {
     <>
       <button
         onClick={() => setOpen(!open)}
-        className="text-sm text-stone-700 hover:bg-stone-100 px-3 py-1.5 rounded-lg flex items-center gap-1.5"
+        className="text-sm text-cream-700 hover:bg-cream-100 px-3 py-1.5 rounded-lg flex items-center gap-1.5"
       >
         <Users size={14} /> {open ? 'Ocultar' : 'Ver'} alumnos · {alumnos.length}
       </button>
       {open && (
-        <div className="basis-full mt-2 border-t border-stone-100 pt-3">
+        <div className="basis-full mt-2 border-t border-cream-100 pt-3">
           {alumnos.length === 0 ? (
-            <p className="text-sm text-stone-400 italic">No hay alumnos en este curso</p>
+            <p className="text-sm text-cream-400 italic">No hay alumnos en este curso</p>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {alumnos
                 .sort((a, b) => (a.apellido + a.nombre).localeCompare(b.apellido + b.nombre))
                 .map(a => (
-                  <div key={a.id} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-stone-50">
+                  <div key={a.id} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-cream-50">
                     <Avatar alumno={a} size="sm" />
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-medium truncate">{fullName(a)}</div>
-                      <div className="text-xs text-stone-500 truncate">{a.horarioCurso || (a.dia ? `${a.dia} ${a.horario || ''}` : 'Sin horario')}</div>
+                      <div className="text-xs text-cream-500 truncate">{a.horarioCurso || (a.dia ? `${a.dia} ${a.horario || ''}` : 'Sin horario')}</div>
                     </div>
                   </div>
                 ))}
@@ -4324,7 +4355,7 @@ function PriceEditorModal({ curso, data, onSave, onClose }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 overflow-y-auto">
       <div className="bg-white rounded-2xl max-w-lg w-full my-8">
-        <div className="border-b border-stone-200 px-6 py-4 flex items-center justify-between">
+        <div className="border-b border-cream-200 px-6 py-4 flex items-center justify-between">
           <h2 className="font-semibold">Cambiar / agregar precio — {curso.nombre}</h2>
           <button onClick={onClose}><X size={20} /></button>
         </div>
@@ -4345,31 +4376,31 @@ function PriceEditorModal({ curso, data, onSave, onClose }) {
           </div>
 
           <div>
-            <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Vigencia desde</label>
-            <input type="date" value={vigencia} onChange={e => setVigencia(e.target.value)} className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 bg-white" />
+            <label className="text-xs text-cream-500 font-medium uppercase tracking-wider">Vigencia desde</label>
+            <input type="date" value={vigencia} onChange={e => setVigencia(e.target.value)} className="w-full mt-1 px-3 py-2 rounded-lg border border-cream-200 bg-white" />
           </div>
 
           {[
             { k: 'MENSUAL', label: 'Cuota mensual' }
           ].map(({ k, label }) => (
-            <div key={k} className="border border-stone-200 rounded-xl p-4">
+            <div key={k} className="border border-cream-200 rounded-xl p-4">
               <div className="text-sm font-medium mb-2">{label}</div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-xs text-stone-500">Efectivo</label>
-                  <input type="number" value={precios[k].efectivo} onChange={e => set(k, 'efectivo', e.target.value)} className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 text-sm" />
+                  <label className="text-xs text-cream-500">Efectivo</label>
+                  <input type="number" value={precios[k].efectivo} onChange={e => set(k, 'efectivo', e.target.value)} className="w-full mt-1 px-3 py-2 rounded-lg border border-cream-200 text-sm" />
                 </div>
                 <div>
-                  <label className="text-xs text-stone-500">Transferencia / MP</label>
-                  <input type="number" value={precios[k].transferencia} onChange={e => set(k, 'transferencia', e.target.value)} className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 text-sm" />
+                  <label className="text-xs text-cream-500">Transferencia / MP</label>
+                  <input type="number" value={precios[k].transferencia} onChange={e => set(k, 'transferencia', e.target.value)} className="w-full mt-1 px-3 py-2 rounded-lg border border-cream-200 text-sm" />
                 </div>
               </div>
             </div>
           ))}
 
           <div className="flex gap-2 pt-2">
-            <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-lg border border-stone-200 hover:bg-stone-50 font-medium text-sm">Cancelar</button>
-            <button onClick={() => onSave(curso.id, precios, vigencia)} className="flex-1 px-4 py-2.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-medium text-sm">Guardar</button>
+            <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-lg border border-cream-200 hover:bg-cream-50 font-medium text-sm">Cancelar</button>
+            <button onClick={() => onSave(curso.id, precios, vigencia)} className="flex-1 px-4 py-2.5 rounded-lg bg-gradient-to-b from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 shadow-md shadow-brand-600/25 text-white font-medium text-sm">Guardar</button>
           </div>
         </div>
       </div>
@@ -4417,29 +4448,29 @@ function BulkPriceUpdateModal({ data, onSave, onClose }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 overflow-y-auto">
       <div className="bg-white rounded-2xl max-w-lg w-full my-8 max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white border-b border-stone-200 px-6 py-4 flex items-center justify-between">
+        <div className="sticky top-0 bg-white border-b border-cream-200 px-6 py-4 flex items-center justify-between">
           <h2 className="font-semibold">Actualizar precios — todos los niveles</h2>
           <button onClick={onClose}><X size={20} /></button>
         </div>
         <div className="p-6 space-y-4">
           <div>
-            <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Vigencia desde (aplica a todos los niveles)</label>
+            <label className="text-xs text-cream-500 font-medium uppercase tracking-wider">Vigencia desde (aplica a todos los niveles)</label>
             <input
               type="date"
               value={vigencia}
               onChange={e => setVigencia(e.target.value)}
               autoFocus
-              className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 bg-white"
+              className="w-full mt-1 px-3 py-2 rounded-lg border border-cream-200 bg-white"
             />
           </div>
 
           <div className="space-y-1">
-            <p className="text-xs text-stone-500">
+            <p className="text-xs text-cream-500">
               Ingresá el nuevo importe en efectivo de cada nivel y andá tabulando. La transferencia se calcula sola (+10%). Dejá vacío o sin cambios el nivel que no quieras actualizar.
             </p>
           </div>
 
-          <div className="divide-y divide-stone-100 border border-stone-200 rounded-xl overflow-hidden">
+          <div className="divide-y divide-cream-100 border border-cream-200 rounded-xl overflow-hidden">
             {cursosActivos.map((c, idx) => {
               const precioActual = buscarPrecioVigente(data.preciosCuotas, c.id, 'MENSUAL', hoy);
               const nuevo = Number(importes[c.id]);
@@ -4448,7 +4479,7 @@ function BulkPriceUpdateModal({ data, onSave, onClose }) {
                 <div key={c.id} className="flex items-center gap-3 px-4 py-3">
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium truncate">{c.nombre}</div>
-                    <div className="text-xs text-stone-400">
+                    <div className="text-xs text-cream-400">
                       Actual: {precioActual ? fmtMoney(precioActual.efectivo) : 'Sin precio'}
                       {transferenciaPreview != null && <> · Transferencia: {fmtMoney(transferenciaPreview)}</>}
                     </div>
@@ -4458,7 +4489,7 @@ function BulkPriceUpdateModal({ data, onSave, onClose }) {
                     tabIndex={idx + 1}
                     value={importes[c.id]}
                     onChange={e => setImporte(c.id, e.target.value)}
-                    className="w-32 px-3 py-2 rounded-lg border border-stone-200 text-sm text-right focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                    className="w-32 px-3 py-2 rounded-lg border border-cream-200 text-sm text-right focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
                   />
                 </div>
               );
@@ -4466,11 +4497,11 @@ function BulkPriceUpdateModal({ data, onSave, onClose }) {
           </div>
 
           <div className="flex gap-2 pt-2">
-            <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-lg border border-stone-200 hover:bg-stone-50 font-medium text-sm">Cancelar</button>
+            <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-lg border border-cream-200 hover:bg-cream-50 font-medium text-sm">Cancelar</button>
             <button
               onClick={guardar}
               disabled={cambios.length === 0 || !vigencia}
-              className="flex-1 px-4 py-2.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-medium text-sm disabled:opacity-50"
+              className="flex-1 px-4 py-2.5 rounded-lg bg-gradient-to-b from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 shadow-md shadow-brand-600/25 text-white font-medium text-sm disabled:opacity-50"
             >
               Guardar {cambios.length > 0 ? `(${cambios.length} nivel${cambios.length !== 1 ? 'es' : ''})` : ''}
             </button>
@@ -4507,7 +4538,7 @@ function CursoFormModal({ curso, onSave, onClose }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 overflow-y-auto">
       <div className="bg-white rounded-2xl max-w-md w-full my-8">
-        <div className="border-b border-stone-200 px-6 py-4 flex items-center justify-between">
+        <div className="border-b border-cream-200 px-6 py-4 flex items-center justify-between">
           <h2 className="font-semibold">{curso ? 'Editar curso' : 'Nuevo curso'}</h2>
           <button onClick={onClose}><X size={20} /></button>
         </div>
@@ -4515,18 +4546,18 @@ function CursoFormModal({ curso, onSave, onClose }) {
           <Field label="Nombre del curso" value={nombre} onChange={setNombre} hint="Ej: 1st Form, FCE, Adultos Avanzado" />
 
           <div>
-            <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Horarios disponibles</label>
-            <p className="text-xs text-stone-400 mt-0.5 mb-2">Cargá los días/horarios en los que se dicta este curso. Después al cargar un alumno, podrás elegir uno.</p>
+            <label className="text-xs text-cream-500 font-medium uppercase tracking-wider">Horarios disponibles</label>
+            <p className="text-xs text-cream-400 mt-0.5 mb-2">Cargá los días/horarios en los que se dicta este curso. Después al cargar un alumno, podrás elegir uno.</p>
 
             <div className="space-y-1.5 mb-2">
               {horarios.length === 0 ? (
-                <div className="text-xs text-stone-400 italic py-2">Sin horarios cargados</div>
+                <div className="text-xs text-cream-400 italic py-2">Sin horarios cargados</div>
               ) : (
                 horarios.map(h => (
-                  <div key={h} className="flex items-center gap-2 bg-stone-50 rounded-lg px-3 py-2">
-                    <Calendar size={14} className="text-stone-400 shrink-0" />
+                  <div key={h} className="flex items-center gap-2 bg-cream-50 rounded-lg px-3 py-2">
+                    <Calendar size={14} className="text-cream-400 shrink-0" />
                     <span className="text-sm flex-1">{h}</span>
-                    <button onClick={() => quitarHorario(h)} className="p-1 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded">
+                    <button onClick={() => quitarHorario(h)} className="p-1 text-cream-400 hover:text-red-600 hover:bg-red-50 rounded">
                       <X size={14} />
                     </button>
                   </div>
@@ -4541,17 +4572,17 @@ function CursoFormModal({ curso, onSave, onClose }) {
                 onChange={e => setNuevoHorario(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), agregarHorario())}
                 placeholder="Ej: Lunes y Miércoles · 18:00 a 19:30"
-                className="flex-1 px-3 py-2 rounded-lg border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                className="flex-1 px-3 py-2 rounded-lg border border-cream-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
               />
-              <button onClick={agregarHorario} disabled={!nuevoHorario.trim()} className="px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-sm disabled:opacity-50">
+              <button onClick={agregarHorario} disabled={!nuevoHorario.trim()} className="px-3 py-2 bg-gradient-to-b from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 shadow-md shadow-brand-600/25 text-white rounded-lg text-sm disabled:opacity-50">
                 <Plus size={16} />
               </button>
             </div>
           </div>
 
           <div>
-            <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Meses que no pagan (excluidos)</label>
-            <p className="text-xs text-stone-400 mt-0.5 mb-2">Tildá los meses que este curso no abona. No aparecerán en la grilla de pagos ni en la vista de deudores.</p>
+            <label className="text-xs text-cream-500 font-medium uppercase tracking-wider">Meses que no pagan (excluidos)</label>
+            <p className="text-xs text-cream-400 mt-0.5 mb-2">Tildá los meses que este curso no abona. No aparecerán en la grilla de pagos ni en la vista de deudores.</p>
             <div className="grid grid-cols-6 gap-1.5">
               {PERIODOS.map(p => {
                 const excl = mesesExcluidos.includes(p.id);
@@ -4562,8 +4593,8 @@ function CursoFormModal({ curso, onSave, onClose }) {
                     onClick={() => toggleMes(p.id)}
                     className={`py-2 px-1 rounded-lg border text-xs font-medium transition-colors ${
                       excl
-                        ? 'bg-stone-200 text-stone-500 border-stone-300'
-                        : 'bg-white text-stone-700 border-stone-200 hover:border-emerald-300'
+                        ? 'bg-cream-200 text-cream-500 border-cream-300'
+                        : 'bg-white text-cream-700 border-cream-200 hover:border-emerald-300'
                     }`}
                   >
                     {excl ? '✕' : '✓'} {p.label}
@@ -4573,12 +4604,12 @@ function CursoFormModal({ curso, onSave, onClose }) {
             </div>
           </div>
 
-          <div className="flex gap-2 pt-4 border-t border-stone-200">
-            <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-lg border border-stone-200 hover:bg-stone-50 font-medium text-sm">Cancelar</button>
+          <div className="flex gap-2 pt-4 border-t border-cream-200">
+            <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-lg border border-cream-200 hover:bg-cream-50 font-medium text-sm">Cancelar</button>
             <button
               onClick={() => onSave({ ...(curso || {}), nombre, horarios, mesesExcluidos })}
               disabled={!nombre.trim()}
-              className="flex-1 px-4 py-2.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-medium text-sm disabled:opacity-50"
+              className="flex-1 px-4 py-2.5 rounded-lg bg-gradient-to-b from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 shadow-md shadow-brand-600/25 text-white font-medium text-sm disabled:opacity-50"
             >
               Guardar
             </button>
@@ -4650,100 +4681,100 @@ function ConfigTab({ data, update }) {
 
   return (
     <div className="space-y-4">
-      <div className="bg-white rounded-2xl border border-stone-200 p-6 space-y-5">
+      <div className="bg-white rounded-2xl border border-cream-200 p-6 space-y-5">
         <h2 className="font-semibold">General</h2>
         <Field label="Nombre del instituto" value={config.nombreInstituto} onChange={v => set('nombreInstituto', v)} />
 
         <div>
-          <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Plantilla de mensaje WhatsApp</label>
+          <label className="text-xs text-cream-500 font-medium uppercase tracking-wider">Plantilla de mensaje WhatsApp</label>
           <textarea
             value={config.plantillaWhatsApp}
             onChange={e => set('plantillaWhatsApp', e.target.value)}
             rows={3}
-            className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 text-sm"
+            className="w-full mt-1 px-3 py-2 rounded-lg border border-cream-200 text-sm"
           />
-          <p className="text-xs text-stone-400 mt-1">
-            Variables: <code className="bg-stone-100 px-1 rounded">{'{nombre}'}</code> <code className="bg-stone-100 px-1 rounded">{'{periodos}'}</code> <code className="bg-stone-100 px-1 rounded">{'{instituto}'}</code> <code className="bg-stone-100 px-1 rounded">{'{total}'}</code> <code className="bg-stone-100 px-1 rounded">{'{medio}'}</code>
+          <p className="text-xs text-cream-400 mt-1">
+            Variables: <code className="bg-cream-100 px-1 rounded">{'{nombre}'}</code> <code className="bg-cream-100 px-1 rounded">{'{periodos}'}</code> <code className="bg-cream-100 px-1 rounded">{'{instituto}'}</code> <code className="bg-cream-100 px-1 rounded">{'{total}'}</code> <code className="bg-cream-100 px-1 rounded">{'{medio}'}</code>
           </p>
         </div>
 
         <div>
-          <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Plantilla "Calcular importe" (cotización, sin cobrar)</label>
+          <label className="text-xs text-cream-500 font-medium uppercase tracking-wider">Plantilla "Calcular importe" (cotización, sin cobrar)</label>
           <textarea
             value={config.plantillaWhatsAppCotizacion || ''}
             onChange={e => set('plantillaWhatsAppCotizacion', e.target.value)}
             rows={3}
-            className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 text-sm"
+            className="w-full mt-1 px-3 py-2 rounded-lg border border-cream-200 text-sm"
           />
-          <p className="text-xs text-stone-400 mt-1">
-            Variables: <code className="bg-stone-100 px-1 rounded">{'{nombre}'}</code> <code className="bg-stone-100 px-1 rounded">{'{periodos}'}</code> <code className="bg-stone-100 px-1 rounded">{'{instituto}'}</code> <code className="bg-stone-100 px-1 rounded">{'{detalleEfectivo}'}</code> <code className="bg-stone-100 px-1 rounded">{'{detalleTransferencia}'}</code> <code className="bg-stone-100 px-1 rounded">{'{total}'}</code> <code className="bg-stone-100 px-1 rounded">{'{totalTransferencia}'}</code>
+          <p className="text-xs text-cream-400 mt-1">
+            Variables: <code className="bg-cream-100 px-1 rounded">{'{nombre}'}</code> <code className="bg-cream-100 px-1 rounded">{'{periodos}'}</code> <code className="bg-cream-100 px-1 rounded">{'{instituto}'}</code> <code className="bg-cream-100 px-1 rounded">{'{detalleEfectivo}'}</code> <code className="bg-cream-100 px-1 rounded">{'{detalleTransferencia}'}</code> <code className="bg-cream-100 px-1 rounded">{'{total}'}</code> <code className="bg-cream-100 px-1 rounded">{'{totalTransferencia}'}</code>
           </p>
         </div>
 
         <div>
-          <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Plantilla "Alumnos particulares" (avisar clase agendada)</label>
+          <label className="text-xs text-cream-500 font-medium uppercase tracking-wider">Plantilla "Alumnos particulares" (avisar clase agendada)</label>
           <textarea
             value={config.plantillaWhatsAppParticular || ''}
             onChange={e => set('plantillaWhatsAppParticular', e.target.value)}
             rows={2}
-            className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 text-sm"
+            className="w-full mt-1 px-3 py-2 rounded-lg border border-cream-200 text-sm"
           />
-          <p className="text-xs text-stone-400 mt-1">
-            Variables: <code className="bg-stone-100 px-1 rounded">{'{nombre}'}</code> <code className="bg-stone-100 px-1 rounded">{'{fecha}'}</code> <code className="bg-stone-100 px-1 rounded">{'{hora}'}</code> <code className="bg-stone-100 px-1 rounded">{'{profesor}'}</code> <code className="bg-stone-100 px-1 rounded">{'{instituto}'}</code>
+          <p className="text-xs text-cream-400 mt-1">
+            Variables: <code className="bg-cream-100 px-1 rounded">{'{nombre}'}</code> <code className="bg-cream-100 px-1 rounded">{'{fecha}'}</code> <code className="bg-cream-100 px-1 rounded">{'{hora}'}</code> <code className="bg-cream-100 px-1 rounded">{'{profesor}'}</code> <code className="bg-cream-100 px-1 rounded">{'{instituto}'}</code>
           </p>
         </div>
 
         <div>
-          <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Plantilla "Alumnos particulares" (reclamar clases adeudadas)</label>
+          <label className="text-xs text-cream-500 font-medium uppercase tracking-wider">Plantilla "Alumnos particulares" (reclamar clases adeudadas)</label>
           <textarea
             value={config.plantillaWhatsAppParticularDeuda || ''}
             onChange={e => set('plantillaWhatsAppParticularDeuda', e.target.value)}
             rows={2}
-            className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 text-sm"
+            className="w-full mt-1 px-3 py-2 rounded-lg border border-cream-200 text-sm"
           />
-          <p className="text-xs text-stone-400 mt-1">
-            Variables: <code className="bg-stone-100 px-1 rounded">{'{nombre}'}</code> <code className="bg-stone-100 px-1 rounded">{'{fechas}'}</code> <code className="bg-stone-100 px-1 rounded">{'{instituto}'}</code>
+          <p className="text-xs text-cream-400 mt-1">
+            Variables: <code className="bg-cream-100 px-1 rounded">{'{nombre}'}</code> <code className="bg-cream-100 px-1 rounded">{'{fechas}'}</code> <code className="bg-cream-100 px-1 rounded">{'{instituto}'}</code>
           </p>
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-stone-200 p-6 space-y-4">
+      <div className="bg-white rounded-2xl border border-cream-200 p-6 space-y-4">
         <div>
           <h2 className="font-semibold">Precio de clases particulares</h2>
-          <p className="text-sm text-stone-500 mt-0.5">Valor de cada clase individual, usado para calcular la cuenta corriente de cada alumno particular.</p>
+          <p className="text-sm text-cream-500 mt-0.5">Valor de cada clase individual, usado para calcular la cuenta corriente de cada alumno particular.</p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
-            <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Con profesor (60 min)</label>
-            <input type="number" value={config.precioClaseProfe} onChange={e => set('precioClaseProfe', Number(e.target.value))} className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 text-sm" />
+            <label className="text-xs text-cream-500 font-medium uppercase tracking-wider">Con profesor (60 min)</label>
+            <input type="number" value={config.precioClaseProfe} onChange={e => set('precioClaseProfe', Number(e.target.value))} className="w-full mt-1 px-3 py-2 rounded-lg border border-cream-200 text-sm" />
           </div>
           <div>
-            <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Nativo (30 min)</label>
-            <input type="number" value={config.precioClaseNativo30} onChange={e => set('precioClaseNativo30', Number(e.target.value))} className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 text-sm" />
+            <label className="text-xs text-cream-500 font-medium uppercase tracking-wider">Nativo (30 min)</label>
+            <input type="number" value={config.precioClaseNativo30} onChange={e => set('precioClaseNativo30', Number(e.target.value))} className="w-full mt-1 px-3 py-2 rounded-lg border border-cream-200 text-sm" />
           </div>
           <div>
-            <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Nativo (60 min)</label>
-            <input type="number" value={config.precioClaseNativo60} onChange={e => set('precioClaseNativo60', Number(e.target.value))} className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 text-sm" />
+            <label className="text-xs text-cream-500 font-medium uppercase tracking-wider">Nativo (60 min)</label>
+            <input type="number" value={config.precioClaseNativo60} onChange={e => set('precioClaseNativo60', Number(e.target.value))} className="w-full mt-1 px-3 py-2 rounded-lg border border-cream-200 text-sm" />
           </div>
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-stone-200 p-6 space-y-4">
+      <div className="bg-white rounded-2xl border border-cream-200 p-6 space-y-4">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="font-semibold">Matrícula (inscripción)</h2>
-            <p className="text-sm text-stone-500 mt-0.5">Valor único para todos los cursos. Se aplica al período "Insc". Cada nueva vigencia conserva las anteriores.</p>
+            <p className="text-sm text-cream-500 mt-0.5">Valor único para todos los cursos. Se aplica al período "Insc". Cada nueva vigencia conserva las anteriores.</p>
           </div>
           <button
             onClick={() => setShowAddMatricula(true)}
-            className="bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-1.5"
+            className="bg-gradient-to-b from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 shadow-md shadow-brand-600/25 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-1.5"
           >
             <Plus size={14} /> Nueva
           </button>
         </div>
 
         {matriculasOrdenadas.length === 0 ? (
-          <div className="border border-dashed border-stone-200 rounded-lg p-6 text-center text-stone-400 text-sm">
+          <div className="border border-dashed border-cream-200 rounded-lg p-6 text-center text-cream-400 text-sm">
             Sin matrícula configurada. Hacé click en "Nueva" para definir el valor.
           </div>
         ) : (
@@ -4751,9 +4782,9 @@ function ConfigTab({ data, update }) {
             {matriculasOrdenadas.map((m, idx) => {
               const vigente = idx === 0 && m.vigenciaDesde <= today();
               return (
-                <div key={m.id} className={`border rounded-lg p-3 flex items-center gap-3 ${vigente ? 'border-emerald-300 bg-emerald-50/40' : 'border-stone-200'}`}>
+                <div key={m.id} className={`border rounded-lg p-3 flex items-center gap-3 ${vigente ? 'border-emerald-300 bg-emerald-50/40' : 'border-cream-200'}`}>
                   <div className="flex-1">
-                    <div className="text-xs font-medium uppercase tracking-wider text-stone-500">
+                    <div className="text-xs font-medium uppercase tracking-wider text-cream-500">
                       {vigente ? <span className="text-emerald-700">Vigente</span> : (m.vigenciaDesde > today() ? <span className="text-amber-700">Programada</span> : 'Anterior')}
                     </div>
                     <div className="text-sm">Desde {m.vigenciaDesde}</div>
@@ -4762,7 +4793,7 @@ function ConfigTab({ data, update }) {
                     <div>Ef: <strong>{fmtMoney(m.efectivo)}</strong></div>
                     <div>Tr: <strong>{fmtMoney(m.transferencia)}</strong></div>
                   </div>
-                  <button onClick={() => deleteMatricula(m.id)} className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
+                  <button onClick={() => deleteMatricula(m.id)} className="p-1.5 text-cream-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
                     <Trash2 size={14} />
                   </button>
                 </div>
@@ -4772,27 +4803,27 @@ function ConfigTab({ data, update }) {
         )}
       </div>
 
-      <div className="bg-white rounded-2xl border border-stone-200 p-6 space-y-5">
+      <div className="bg-white rounded-2xl border border-cream-200 p-6 space-y-5">
         <h2 className="font-semibold">Recargos</h2>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Recargo del 16 al fin de mes (%)</label>
-            <input type="number" value={config.recargoSegundaQuincenaPorcentaje} onChange={e => set('recargoSegundaQuincenaPorcentaje', Number(e.target.value))} className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 text-sm" />
-            <p className="text-xs text-stone-400 mt-1">Se aplica a efectivo y transferencia</p>
+            <label className="text-xs text-cream-500 font-medium uppercase tracking-wider">Recargo del 16 al fin de mes (%)</label>
+            <input type="number" value={config.recargoSegundaQuincenaPorcentaje} onChange={e => set('recargoSegundaQuincenaPorcentaje', Number(e.target.value))} className="w-full mt-1 px-3 py-2 rounded-lg border border-cream-200 text-sm" />
+            <p className="text-xs text-cream-400 mt-1">Se aplica a efectivo y transferencia</p>
           </div>
           <div>
-            <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Recargo mes vencido (%)</label>
-            <input type="number" value={config.recargoMesVencidoPorcentaje} onChange={e => set('recargoMesVencidoPorcentaje', Number(e.target.value))} className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 text-sm" />
-            <p className="text-xs text-stone-400 mt-1">Sobre precio de transferencia, aplica a cualquier medio de pago</p>
+            <label className="text-xs text-cream-500 font-medium uppercase tracking-wider">Recargo mes vencido (%)</label>
+            <input type="number" value={config.recargoMesVencidoPorcentaje} onChange={e => set('recargoMesVencidoPorcentaje', Number(e.target.value))} className="w-full mt-1 px-3 py-2 rounded-lg border border-cream-200 text-sm" />
+            <p className="text-xs text-cream-400 mt-1">Sobre precio de transferencia, aplica a cualquier medio de pago</p>
           </div>
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-stone-200 p-6 space-y-4">
+      <div className="bg-white rounded-2xl border border-cream-200 p-6 space-y-4">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="font-semibold">Descuentos por hermanos</h2>
-            <p className="text-sm text-stone-500 mt-0.5">El descuento es único por grupo familiar y se aplica siempre a la cuota más barata (nunca se acumula con otra). El porcentaje depende de cuántos hermanos activos hay en total: definí acá el porcentaje según esa cantidad.</p>
+            <p className="text-sm text-cream-500 mt-0.5">El descuento es único por grupo familiar y se aplica siempre a la cuota más barata (nunca se acumula con otra). El porcentaje depende de cuántos hermanos activos hay en total: definí acá el porcentaje según esa cantidad.</p>
           </div>
           <button
             onClick={() => {
@@ -4800,14 +4831,14 @@ function ConfigTab({ data, update }) {
               const nuevo = [...(config.descuentosHermanos || []), { posicion: ultima + 1, porcentaje: 0 }];
               setConfig({ ...config, descuentosHermanos: nuevo });
             }}
-            className="bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-1.5"
+            className="bg-gradient-to-b from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 shadow-md shadow-brand-600/25 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-1.5"
           >
             <Plus size={14} /> Agregar
           </button>
         </div>
 
         {(config.descuentosHermanos || []).length === 0 ? (
-          <div className="border border-dashed border-stone-200 rounded-lg p-6 text-center text-stone-400 text-sm">
+          <div className="border border-dashed border-cream-200 rounded-lg p-6 text-center text-cream-400 text-sm">
             Sin descuentos por hermano. Hacé click en "Agregar" para crear uno.
           </div>
         ) : (
@@ -4815,10 +4846,10 @@ function ConfigTab({ data, update }) {
             {[...(config.descuentosHermanos || [])].sort((a, b) => a.posicion - b.posicion).map((d, idx, arr) => {
               const realIdx = (config.descuentosHermanos || []).findIndex(x => x === d);
               return (
-                <div key={realIdx} className="flex items-center gap-3 p-3 border border-stone-200 rounded-lg">
+                <div key={realIdx} className="flex items-center gap-3 p-3 border border-cream-200 rounded-lg">
                   <div className="flex-1 grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs text-stone-500">Cantidad de hermanos</label>
+                      <label className="text-xs text-cream-500">Cantidad de hermanos</label>
                       <input
                         type="number"
                         min="1"
@@ -4828,11 +4859,11 @@ function ConfigTab({ data, update }) {
                           newArr[realIdx] = { ...d, posicion: Number(e.target.value) || 1 };
                           setConfig({ ...config, descuentosHermanos: newArr });
                         }}
-                        className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 text-sm"
+                        className="w-full mt-1 px-3 py-2 rounded-lg border border-cream-200 text-sm"
                       />
                     </div>
                     <div>
-                      <label className="text-xs text-stone-500">% de descuento</label>
+                      <label className="text-xs text-cream-500">% de descuento</label>
                       <input
                         type="number"
                         min="0"
@@ -4843,7 +4874,7 @@ function ConfigTab({ data, update }) {
                           newArr[realIdx] = { ...d, porcentaje: Number(e.target.value) || 0 };
                           setConfig({ ...config, descuentosHermanos: newArr });
                         }}
-                        className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 text-sm"
+                        className="w-full mt-1 px-3 py-2 rounded-lg border border-cream-200 text-sm"
                       />
                     </div>
                   </div>
@@ -4852,7 +4883,7 @@ function ConfigTab({ data, update }) {
                       const newArr = config.descuentosHermanos.filter((_, i) => i !== realIdx);
                       setConfig({ ...config, descuentosHermanos: newArr });
                     }}
-                    className="p-2 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                    className="p-2 text-cream-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
                   >
                     <Trash2 size={14} />
                   </button>
@@ -4862,19 +4893,19 @@ function ConfigTab({ data, update }) {
           </div>
         )}
 
-        <div className="bg-stone-50 rounded-lg p-3 text-xs text-stone-600">
+        <div className="bg-cream-50 rounded-lg p-3 text-xs text-cream-600">
           <strong>Cómo funciona:</strong> los hermanos se ordenan automáticamente de cuota más cara a más barata. La posición 1 es quien paga más (sin descuento), y el más barato ocupa la última posición y recibe el mayor descuento. Recordá hacer click en <strong>Guardar configuración</strong> al final.
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-stone-200 p-6 space-y-3">
+      <div className="bg-white rounded-2xl border border-cream-200 p-6 space-y-3">
         <h2 className="font-semibold">Backup de datos</h2>
-        <p className="text-sm text-stone-500">Exportá tus datos como respaldo o para mover a otra computadora.</p>
+        <p className="text-sm text-cream-500">Exportá tus datos como respaldo o para mover a otra computadora.</p>
         <div className="flex gap-2">
-          <button onClick={exportar} className="px-4 py-2 rounded-lg border border-stone-200 hover:bg-stone-50 text-sm flex items-center gap-2">
+          <button onClick={exportar} className="px-4 py-2 rounded-lg border border-cream-200 hover:bg-cream-50 text-sm flex items-center gap-2">
             <Download size={14} /> Exportar JSON
           </button>
-          <label className="px-4 py-2 rounded-lg border border-stone-200 hover:bg-stone-50 text-sm flex items-center gap-2 cursor-pointer">
+          <label className="px-4 py-2 rounded-lg border border-cream-200 hover:bg-cream-50 text-sm flex items-center gap-2 cursor-pointer">
             <Upload size={14} /> Importar JSON
             <input type="file" accept=".json" onChange={importar} className="hidden" />
           </label>
@@ -4882,7 +4913,7 @@ function ConfigTab({ data, update }) {
       </div>
 
       <div className="sticky bottom-4 flex justify-end">
-        <button onClick={save} className="bg-emerald-700 hover:bg-emerald-800 text-white px-6 py-2.5 rounded-lg font-medium text-sm shadow-lg">
+        <button onClick={save} className="bg-gradient-to-b from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 shadow-lg shadow-brand-600/30 text-white px-6 py-2.5 rounded-lg font-medium text-sm">
           {saved ? '✓ Guardado' : 'Guardar configuración'}
         </button>
       </div>
@@ -4957,31 +4988,31 @@ function DeudoresView({ data, update }) {
 
   return (
     <div className="space-y-4">
-      <div className="bg-white rounded-2xl border border-stone-200 p-6 space-y-4">
+      <div className="bg-white rounded-2xl border border-cream-200 p-6 space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
             <h2 className="font-semibold">Deudores por período</h2>
-            <p className="text-sm text-stone-500 mt-0.5">Alumnos sin pago registrado para el mes seleccionado</p>
+            <p className="text-sm text-cream-500 mt-0.5">Alumnos sin pago registrado para el mes seleccionado</p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <select
               value={periodo}
               onChange={e => { setPeriodo(e.target.value); setEnviados(new Set()); setCursoFiltro('todos'); }}
-              className="px-3 py-2 rounded-lg border border-stone-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+              className="px-3 py-2 rounded-lg border border-cream-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
             >
               {PERIODOS.map(p => <option key={p.id} value={p.id}>{p.full}</option>)}
             </select>
             <select
               value={anio}
               onChange={e => { setAnio(Number(e.target.value)); setEnviados(new Set()); }}
-              className="px-3 py-2 rounded-lg border border-stone-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+              className="px-3 py-2 rounded-lg border border-cream-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
             >
               {[2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
             </select>
             <select
               value={cursoFiltro}
               onChange={e => { setCursoFiltro(e.target.value); setEnviados(new Set()); }}
-              className="px-3 py-2 rounded-lg border border-stone-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+              className="px-3 py-2 rounded-lg border border-cream-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
             >
               <option value="todos">Todos los cursos</option>
               {cursosDisponibles.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
@@ -4996,46 +5027,46 @@ function DeudoresView({ data, update }) {
         )}
 
         <div>
-          <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Mensaje de recordatorio</label>
+          <label className="text-xs text-cream-500 font-medium uppercase tracking-wider">Mensaje de recordatorio</label>
           <textarea
             value={plantilla}
             onChange={e => setPlantilla(e.target.value)}
             rows={2}
-            className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+            className="w-full mt-1 px-3 py-2 rounded-lg border border-cream-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
           />
-          <p className="text-xs text-stone-400 mt-1">
-            Variables: <code className="bg-stone-100 px-1 rounded">{'{nombre}'}</code>{' '}
-            <code className="bg-stone-100 px-1 rounded">{'{mes}'}</code>{' '}
-            <code className="bg-stone-100 px-1 rounded">{'{instituto}'}</code>
+          <p className="text-xs text-cream-400 mt-1">
+            Variables: <code className="bg-cream-100 px-1 rounded">{'{nombre}'}</code>{' '}
+            <code className="bg-cream-100 px-1 rounded">{'{mes}'}</code>{' '}
+            <code className="bg-cream-100 px-1 rounded">{'{instituto}'}</code>
           </p>
         </div>
       </div>
 
       {totalDeudores === 0 ? (
-        <div className="bg-white rounded-2xl border border-stone-200 p-12 text-center text-stone-400">
+        <div className="bg-white rounded-2xl border border-cream-200 p-12 text-center text-cream-400">
           <Check size={32} className="mx-auto mb-3 text-emerald-500 opacity-60" />
           <p className="text-sm">No hay deudores para {periodoObj?.full}</p>
         </div>
       ) : (
         deudoresPorCurso.map(({ curso, alumnos }) => (
-          <div key={curso.id} className="bg-white rounded-2xl border border-stone-200 overflow-hidden">
-            <div className="px-6 py-4 border-b border-stone-100 bg-stone-50/60 flex items-center gap-3">
-              <BookOpen size={16} className="text-stone-400" />
-              <span className="font-semibold text-stone-900">{curso.nombre}</span>
-              <span className="text-xs text-stone-500 bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
+          <div key={curso.id} className="bg-white rounded-2xl border border-cream-200 overflow-hidden">
+            <div className="px-6 py-4 border-b border-cream-100 bg-cream-50/60 flex items-center gap-3">
+              <BookOpen size={16} className="text-cream-400" />
+              <span className="font-semibold text-cream-900">{curso.nombre}</span>
+              <span className="text-xs text-cream-500 bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
                 {alumnos.length} sin pagar
               </span>
             </div>
-            <div className="divide-y divide-stone-100">
+            <div className="divide-y divide-cream-100">
               {alumnos.map(a => {
                 const enviado = enviados.has(`${a.id}-${periodo}-${anio}`);
                 return (
-                  <div key={a.id} className={`px-5 py-3 ${enviado ? 'bg-emerald-50/40' : 'hover:bg-stone-50'}`}>
+                  <div key={a.id} className={`px-5 py-3 ${enviado ? 'bg-emerald-50/40' : 'hover:bg-cream-50'}`}>
                     <div className="flex items-center gap-3">
                       <Avatar alumno={a} size="sm" />
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-stone-900">{fullName(a)}</div>
-                        <div className="text-xs text-stone-500">{a.celular || 'Sin celular'}</div>
+                        <div className="text-sm font-medium text-cream-900">{fullName(a)}</div>
+                        <div className="text-xs text-cream-500">{a.celular || 'Sin celular'}</div>
                       </div>
                       {a.celular ? (
                         <button
@@ -5043,14 +5074,14 @@ function DeudoresView({ data, update }) {
                           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap ${
                             enviado
                               ? 'bg-emerald-100 text-emerald-700'
-                              : 'bg-emerald-700 hover:bg-emerald-800 text-white'
+                              : 'bg-gradient-to-b from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 shadow-md shadow-brand-600/25 text-white'
                           }`}
                         >
                           <MessageCircle size={14} />
                           {enviado ? 'Enviado' : 'Recordar'}
                         </button>
                       ) : (
-                        <span className="text-xs text-stone-400 px-3 py-1.5 border border-dashed border-stone-200 rounded-lg">Sin celular</span>
+                        <span className="text-xs text-cream-400 px-3 py-1.5 border border-dashed border-cream-200 rounded-lg">Sin celular</span>
                       )}
                     </div>
                     {!a.contactoNombre && (
@@ -5078,7 +5109,7 @@ function MatriculaFormModal({ onSave, onClose }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl max-w-md w-full">
-        <div className="border-b border-stone-200 px-6 py-4 flex items-center justify-between">
+        <div className="border-b border-cream-200 px-6 py-4 flex items-center justify-between">
           <h2 className="font-semibold">Nueva matrícula</h2>
           <button onClick={onClose}><X size={20} /></button>
         </div>
@@ -5090,25 +5121,25 @@ function MatriculaFormModal({ onSave, onClose }) {
             </div>
           </div>
           <div>
-            <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Vigencia desde</label>
-            <input type="date" value={vigenciaDesde} onChange={e => setVigenciaDesde(e.target.value)} className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 bg-white" />
+            <label className="text-xs text-cream-500 font-medium uppercase tracking-wider">Vigencia desde</label>
+            <input type="date" value={vigenciaDesde} onChange={e => setVigenciaDesde(e.target.value)} className="w-full mt-1 px-3 py-2 rounded-lg border border-cream-200 bg-white" />
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Efectivo</label>
-              <input type="number" value={efectivo} onChange={e => setEfectivo(e.target.value)} className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 text-sm" />
+              <label className="text-xs text-cream-500 font-medium uppercase tracking-wider">Efectivo</label>
+              <input type="number" value={efectivo} onChange={e => setEfectivo(e.target.value)} className="w-full mt-1 px-3 py-2 rounded-lg border border-cream-200 text-sm" />
             </div>
             <div>
-              <label className="text-xs text-stone-500 font-medium uppercase tracking-wider">Transferencia / MP</label>
-              <input type="number" value={transferencia} onChange={e => setTransferencia(e.target.value)} className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-200 text-sm" />
+              <label className="text-xs text-cream-500 font-medium uppercase tracking-wider">Transferencia / MP</label>
+              <input type="number" value={transferencia} onChange={e => setTransferencia(e.target.value)} className="w-full mt-1 px-3 py-2 rounded-lg border border-cream-200 text-sm" />
             </div>
           </div>
           <div className="flex gap-2 pt-2">
-            <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-lg border border-stone-200 hover:bg-stone-50 font-medium text-sm">Cancelar</button>
+            <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-lg border border-cream-200 hover:bg-cream-50 font-medium text-sm">Cancelar</button>
             <button
               onClick={() => onSave({ efectivo: Number(efectivo), transferencia: Number(transferencia), vigenciaDesde })}
               disabled={!valido}
-              className="flex-1 px-4 py-2.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-medium text-sm disabled:opacity-50"
+              className="flex-1 px-4 py-2.5 rounded-lg bg-gradient-to-b from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 shadow-md shadow-brand-600/25 text-white font-medium text-sm disabled:opacity-50"
             >
               Guardar
             </button>
