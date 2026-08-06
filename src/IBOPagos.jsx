@@ -688,8 +688,6 @@ function PagosTab({ data, update }) {
   const closePaymentModal = () => {
     setShowPaymentModal(false);
     setSelectedPeriodos([]);
-    if (!multiMode) setSelectedAlumnoId(null);
-    else setMultiAlumnos([]);
   };
 
   const verPago = (alumnoId, periodoId, anio) => {
