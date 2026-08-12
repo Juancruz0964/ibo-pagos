@@ -416,7 +416,13 @@ export default function App() {
       if (saved) {
         setData(aplicarMigraciones(saved));
         setLoadFailed(false);
-      } else {
+      } else if (GAS_URL) {
+        // En modo local (sin GAS_URL) un resultado vacío es normal (primera
+        // vez, nada guardado todavía en localStorage). En modo nube, en
+        // cambio, no hay forma de distinguir "recién empieza" de "falló la
+        // carga" — así que por seguridad se trata como fallo, para no
+        // arriesgarse a guardar el estado de ejemplo por encima de datos
+        // reales que no se pudieron traer.
         setLoadFailed(true);
       }
       setLoaded(true);
@@ -4450,8 +4456,8 @@ function PriceEditorModal({ curso, data, onSave, onClose }) {
 }
 
 // Actualización masiva de precios: una sola fecha de vigencia para todos los
-// niveles, se tabula por el importe en efectivo y la transferencia se calcula
-// sola (+10%). Solo crea un registro nuevo para los cursos cuyo importe cambió.
+// niveles, se cargan a mano el importe en efectivo y el de transferencia de
+// cada nivel. Solo crea un registro nuevo para los cursos cuyo importe cambió.
 function BulkPriceUpdateModal({ data, onSave, onClose }) {
   const hoy = today();
   const cursosActivos = data.cursos.filter(c => c.activo);
@@ -4460,18 +4466,24 @@ function BulkPriceUpdateModal({ data, onSave, onClose }) {
     const init = {};
     cursosActivos.forEach(c => {
       const precio = buscarPrecioVigente(data.preciosCuotas, c.id, 'MENSUAL', hoy);
-      init[c.id] = precio ? String(precio.efectivo) : '';
+      init[c.id] = {
+        efectivo: precio ? String(precio.efectivo) : '',
+        transferencia: precio ? String(precio.transferencia) : ''
+      };
     });
     return init;
   });
 
-  const setImporte = (cursoId, val) => setImportes({ ...importes, [cursoId]: val });
+  const setImporte = (cursoId, campo, val) =>
+    setImportes({ ...importes, [cursoId]: { ...importes[cursoId], [campo]: val } });
 
   const cambios = cursosActivos.filter(c => {
     const precio = buscarPrecioVigente(data.preciosCuotas, c.id, 'MENSUAL', hoy);
-    const nuevo = Number(importes[c.id]);
-    if (!importes[c.id] || Number.isNaN(nuevo) || nuevo <= 0) return false;
-    return !precio || nuevo !== precio.efectivo;
+    const { efectivo, transferencia } = importes[c.id] || {};
+    const nuevoEf = Number(efectivo);
+    const nuevoTr = Number(transferencia);
+    if (!efectivo || !transferencia || Number.isNaN(nuevoEf) || Number.isNaN(nuevoTr) || nuevoEf <= 0 || nuevoTr <= 0) return false;
+    return !precio || nuevoEf !== precio.efectivo || nuevoTr !== precio.transferencia;
   });
 
   const guardar = () => {
@@ -4479,8 +4491,8 @@ function BulkPriceUpdateModal({ data, onSave, onClose }) {
       id: uid(),
       cursoId: c.id,
       tipo: 'MENSUAL',
-      efectivo: Number(importes[c.id]),
-      transferencia: Math.round(Number(importes[c.id]) * 1.1),
+      efectivo: Number(importes[c.id].efectivo),
+      transferencia: Number(importes[c.id].transferencia),
       vigenciaDesde: vigencia
     }));
     onSave(nuevos);
@@ -4507,31 +4519,41 @@ function BulkPriceUpdateModal({ data, onSave, onClose }) {
 
           <div className="space-y-1">
             <p className="text-xs text-cream-500">
-              Ingresá el nuevo importe en efectivo de cada nivel y andá tabulando. La transferencia se calcula sola (+10%). Dejá vacío o sin cambios el nivel que no quieras actualizar.
+              Ingresá el nuevo importe en efectivo y en transferencia de cada nivel. Dejá vacío o sin cambios el nivel que no quieras actualizar.
             </p>
           </div>
 
           <div className="divide-y divide-cream-100 border border-cream-200 rounded-xl overflow-hidden">
             {cursosActivos.map((c, idx) => {
               const precioActual = buscarPrecioVigente(data.preciosCuotas, c.id, 'MENSUAL', hoy);
-              const nuevo = Number(importes[c.id]);
-              const transferenciaPreview = nuevo > 0 ? Math.round(nuevo * 1.1) : null;
               return (
                 <div key={c.id} className="flex items-center gap-3 px-4 py-3">
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium truncate">{c.nombre}</div>
                     <div className="text-xs text-cream-400">
-                      Actual: {precioActual ? fmtMoney(precioActual.efectivo) : 'Sin precio'}
-                      {transferenciaPreview != null && <> · Transferencia: {fmtMoney(transferenciaPreview)}</>}
+                      {precioActual ? `Actual: ${fmtMoney(precioActual.efectivo)} efectivo · ${fmtMoney(precioActual.transferencia)} transferencia` : 'Sin precio'}
                     </div>
                   </div>
-                  <input
-                    type="number"
-                    tabIndex={idx + 1}
-                    value={importes[c.id]}
-                    onChange={e => setImporte(c.id, e.target.value)}
-                    className="w-32 px-3 py-2 rounded-lg border border-cream-200 text-sm text-right focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
-                  />
+                  <div>
+                    <label className="text-[10px] text-cream-400 uppercase tracking-wide">Efectivo</label>
+                    <input
+                      type="number"
+                      tabIndex={idx * 2 + 1}
+                      value={importes[c.id]?.efectivo ?? ''}
+                      onChange={e => setImporte(c.id, 'efectivo', e.target.value)}
+                      className="w-28 px-3 py-2 rounded-lg border border-cream-200 text-sm text-right focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-cream-400 uppercase tracking-wide">Transferencia</label>
+                    <input
+                      type="number"
+                      tabIndex={idx * 2 + 2}
+                      value={importes[c.id]?.transferencia ?? ''}
+                      onChange={e => setImporte(c.id, 'transferencia', e.target.value)}
+                      className="w-28 px-3 py-2 rounded-lg border border-cream-200 text-sm text-right focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+                    />
+                  </div>
                 </div>
               );
             })}
