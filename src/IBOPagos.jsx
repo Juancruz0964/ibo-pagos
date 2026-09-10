@@ -389,6 +389,8 @@ const obtenerEstadoCuota = (pagos, alumnoId, periodoId, anio) => {
 // ============================================================
 export default function App() {
   const [data, setData] = useState(initialState);
+  const dataRef = useRef(data);
+  useEffect(() => { dataRef.current = data; }, [data]);
   const [loaded, setLoaded] = useState(false);
   // Si el pedido inicial de datos falla o vuelve vacío, NO hay que asumir
   // "instituto nuevo" y guardar el estado de ejemplo por encima de lo real:
@@ -436,12 +438,15 @@ export default function App() {
     if (!loaded) return;
     const intervalo = setInterval(() => {
       if (saveStatusRef.current !== 'idle') return;
+      // Foto de los datos actuales AL MOMENTO DE PEDIR: si para cuando esta
+      // respuesta llegue "data" ya cambió (aunque ese cambio ya se haya
+      // guardado y saveStatus haya vuelto a "idle" mientras tanto), esta
+      // respuesta quedó vieja y hay que descartarla — no alcanza con mirar
+      // si HAY un guardado en curso justo en el instante en que responde.
+      const dataAlPedir = dataRef.current;
       storage.get('ibo_data').then(saved => {
         if (!saved) return;
-        // Si mientras se pedían los datos se hizo un cambio local (ej: se
-        // cobró algo), esta respuesta ya quedó vieja — se descarta en vez de
-        // pisar el cambio recién hecho.
-        if (saveStatusRef.current !== 'idle') return;
+        if (dataRef.current !== dataAlPedir) return;
         const fresca = aplicarMigraciones(saved);
         setLoadFailed(false); // si la carga inicial había fallado, esto la recupera
         setData(actual => JSON.stringify(actual) === JSON.stringify(fresca) ? actual : fresca);
