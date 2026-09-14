@@ -1727,10 +1727,31 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
     const cfg = data.configuracion;
     const inst = cfg.nombreInstituto;
     const medio = formatMediosStr(items, usaMixtoLocal, distrLocal);
+    const nombreContacto = alumno.contactoNombre || alumno.nombre;
 
     const totalesItems = items.filter(it => it.modalidad === 'total');
     const parciales = items.filter(it => it.modalidad === 'parcial');
     const saldos = items.filter(it => it.modalidad === 'saldo');
+
+    // Si se cobra más de una cuota junta (mezclando total/parcial/saldo), un
+    // solo mensaje prolijo con un renglón por cuota, en vez de pegar varias
+    // plantillas una atrás de otra (quedaba repetido y con saludos distintos).
+    if (items.length > 1) {
+      const renglones = [];
+      totalesItems.forEach(it => {
+        let linea = `*${it.periodo.full}*: ${fmtMoney(it.monto)} (pago completo)`;
+        if (it.creditoAplicado > 0) linea += ` — se descontaron ${fmtMoney(it.creditoAplicado)} de saldo a favor`;
+        if (it.extraAFavor > 0) linea += ` — quedan ${fmtMoney(it.extraAFavor)} a favor`;
+        renglones.push(linea);
+      });
+      parciales.forEach(it => {
+        renglones.push(`*${it.periodo.full}*: ${fmtMoney(it.monto)} — saldo pendiente ${fmtMoney(it.saldoRestante)}`);
+      });
+      saldos.forEach(it => {
+        renglones.push(`*${it.periodo.full}*: ${fmtMoney(it.monto)} — saldo saldado ✓`);
+      });
+      return `Hola, ${nombreContacto}! Te confirmamos en ${inst}:\n${renglones.join('\n')}\n¡Muchas gracias!`;
+    }
 
     const partes = [];
 
@@ -1738,7 +1759,7 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
       const periodos = totalesItems.map(it => mesTexto(it.periodo)).join(', ');
       const totalMonto = totalesItems.reduce((s, it) => s + it.monto, 0);
       let mensaje = replaceVars(cfg.plantillaWhatsApp, {
-        nombre: alumno.contactoNombre || alumno.nombre,
+        nombre: nombreContacto,
         periodos,
         instituto: inst,
         total: fmtMoney(totalMonto),
@@ -1753,7 +1774,7 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
 
     parciales.forEach(it => {
       partes.push(replaceVars(cfg.plantillaWhatsAppParcial || 'Hola {nombre}! Recibimos un pago parcial de {monto} ({medio}) para la cuota de {periodo} en {instituto}. Saldo pendiente: {saldo}. ¡Gracias!', {
-        nombre: alumno.contactoNombre || alumno.nombre,
+        nombre: nombreContacto,
         monto: fmtMoney(it.monto),
         periodo: mesTexto(it.periodo),
         instituto: inst,
@@ -1764,7 +1785,7 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
 
     saldos.forEach(it => {
       partes.push(replaceVars(cfg.plantillaWhatsAppSaldo || 'Hola {nombre}! Confirmamos el pago del saldo pendiente de {periodo} ({monto} en {medio}) en {instituto}. ¡Cuota saldada!', {
-        nombre: alumno.contactoNombre || alumno.nombre,
+        nombre: nombreContacto,
         monto: fmtMoney(it.monto),
         periodo: mesTexto(it.periodo),
         instituto: inst,
