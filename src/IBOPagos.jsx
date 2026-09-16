@@ -124,7 +124,17 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 
 // En los mensajes de WhatsApp el mes/período va en minúscula (más natural en
 // una oración); en el resto de la app (títulos, listas) se deja tal cual.
 const mesTexto = (periodo) => periodo.full.toLowerCase();
-const today = () => new Date().toISOString().split('T')[0];
+// Fecha en formato YYYY-MM-DD usando el día/mes/año LOCAL del dispositivo,
+// nunca UTC — con toISOString() alcanzaba con que fueran las 21hs para
+// adelante en Argentina (UTC-3) para que ya se creyera que era el día
+// siguiente, disparando recargos antes de tiempo.
+const fechaLocal = (d) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+const today = () => fechaLocal(new Date());
 // Hora local (HH:MM) al momento de cobrar, para saber cuándo exactamente se registró un pago
 const horaActual = () => {
   const d = new Date();
@@ -3482,7 +3492,7 @@ const fechaSesionActual = (diaNombre) => {
   if (delta < 0) delta += 7;
   const fecha = new Date(hoy);
   fecha.setDate(hoy.getDate() - delta);
-  return fecha.toISOString().split('T')[0]; // YYYY-MM-DD
+  return fechaLocal(fecha);
 };
 
 const fmtFechaCorta = (isoFecha) => {
@@ -4322,7 +4332,7 @@ function PrecioHistory({ data, cursoId, onDelete }) {
         // El "hasta" es el día antes de la próxima vigencia (el de la posición idx-1)
         const proximo = new Date(arr[idx - 1].vigenciaDesde + 'T00:00:00');
         proximo.setDate(proximo.getDate() - 1);
-        p._hasta = proximo.toISOString().split('T')[0];
+        p._hasta = fechaLocal(proximo);
       }
     });
   });
