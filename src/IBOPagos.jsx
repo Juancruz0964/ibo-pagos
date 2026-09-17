@@ -142,6 +142,14 @@ const horaActual = () => {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 };
 
+// Cuánto de un pago fue efectivo. Los pagos nuevos ya traen montoEfectivo
+// calculado exacto (incluso repartidos entre efectivo y transferencia/MP).
+// Los pagos viejos (de antes de que existiera este campo) no lo tienen: para
+// esos se deduce del método guardado en su momento (efectivo/transferencia),
+// así los días anteriores a la Caja también se pueden ver.
+const montoEfectivoDePago = (pago) =>
+  pago.montoEfectivo != null ? pago.montoEfectivo : (pago.metodo === 'efectivo' ? (pago.montoCobrado || 0) : 0);
+
 // ---- Caja: cobrado en efectivo de un día puntual ----
 // Solo lee pagos ya existentes (alumnos regulares + particulares), nunca los
 // modifica. montoEfectivo en pagos de alumnos y metodo en pagos de
@@ -149,7 +157,9 @@ const horaActual = () => {
 const cobradoEfectivoDelDia = (data, fecha) => {
   const items = [];
   (data.pagos || []).forEach(pago => {
-    if (pago.fechaPago !== fecha || !(pago.montoEfectivo > 0)) return;
+    if (pago.fechaPago !== fecha) return;
+    const monto = montoEfectivoDePago(pago);
+    if (!(monto > 0)) return;
     const alumno = data.alumnos.find(a => a.id === pago.alumnoId);
     const periodo = PERIODOS.find(p => p.id === pago.periodoId);
     items.push({
@@ -157,7 +167,7 @@ const cobradoEfectivoDelDia = (data, fecha) => {
       nombre: alumno ? `${alumno.apellido}, ${alumno.nombre}` : 'Alumno',
       concepto: `${periodo ? periodo.full : ''}${pago.anio ? ' ' + pago.anio : ''}`.trim(),
       hora: pago.horaPago || '',
-      monto: pago.montoEfectivo
+      monto
     });
   });
   (data.alumnosParticulares || []).forEach(p => {
@@ -192,10 +202,11 @@ const cobradoEfectivoDesde = (data, conteo, fechaHasta) => {
   if (!conteo) return 0;
   let total = 0;
   (data.pagos || []).forEach(pago => {
-    if (!(pago.montoEfectivo > 0)) return;
+    const monto = montoEfectivoDePago(pago);
+    if (!(monto > 0)) return;
     if (pago.fechaPago < conteo.fecha || pago.fechaPago > fechaHasta) return;
     if (pago.fechaPago === conteo.fecha && (pago.horaPago || '') <= (conteo.hora || '')) return;
-    total += pago.montoEfectivo;
+    total += monto;
   });
   (data.alumnosParticulares || []).forEach(p => {
     (p.pagos || []).forEach(pg => {
