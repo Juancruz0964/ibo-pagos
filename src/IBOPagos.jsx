@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, Plus, X, Edit2, Trash2, Users, BookOpen, Settings, CreditCard,
   Check, MessageCircle, ChevronRight, Download, Upload, AlertCircle,
-  Calendar, DollarSign, UserPlus, History, Tag, Home, Ban, Calculator, Clock
+  Calendar, DollarSign, UserPlus, History, Tag, Home, Ban, Calculator, Clock, Wallet
 } from 'lucide-react';
 
 // ============================================================
@@ -92,6 +92,7 @@ const initialState = {
   promociones: [],
   pagos: [],
   alumnosParticulares: [],
+  cajaConteos: [],
   configuracion: {
     nombreInstituto: 'IBO',
     recargoSegundaQuincenaPorcentaje: 5,
@@ -139,6 +140,72 @@ const today = () => fechaLocal(new Date());
 const horaActual = () => {
   const d = new Date();
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
+
+// ---- Caja: cobrado en efectivo de un día puntual ----
+// Solo lee pagos ya existentes (alumnos regulares + particulares), nunca los
+// modifica. montoEfectivo en pagos de alumnos y metodo en pagos de
+// particulares son los que determinan si ese cobro entra acá.
+const cobradoEfectivoDelDia = (data, fecha) => {
+  const items = [];
+  (data.pagos || []).forEach(pago => {
+    if (pago.fechaPago !== fecha || !(pago.montoEfectivo > 0)) return;
+    const alumno = data.alumnos.find(a => a.id === pago.alumnoId);
+    const periodo = PERIODOS.find(p => p.id === pago.periodoId);
+    items.push({
+      id: pago.id,
+      nombre: alumno ? `${alumno.apellido}, ${alumno.nombre}` : 'Alumno',
+      concepto: `${periodo ? periodo.full : ''}${pago.anio ? ' ' + pago.anio : ''}`.trim(),
+      hora: pago.horaPago || '',
+      monto: pago.montoEfectivo
+    });
+  });
+  (data.alumnosParticulares || []).forEach(p => {
+    (p.pagos || []).forEach(pg => {
+      if (pg.fecha !== fecha || pg.metodo !== 'efectivo') return;
+      items.push({
+        id: pg.id,
+        nombre: `Particular · ${p.nombre}`,
+        concepto: 'Cuenta corriente',
+        hora: '',
+        monto: pg.monto
+      });
+    });
+  });
+  items.sort((a, b) => (a.hora || '').localeCompare(b.hora || ''));
+  const total = items.reduce((s, it) => s + it.monto, 0);
+  return { items, total };
+};
+
+// El conteo manual más reciente con fecha <= la elegida: el punto de partida
+// vigente para calcular "deberías tener ahora" en esa fecha.
+const ultimoConteoHasta = (data, fecha) => {
+  const conteos = (data.cajaConteos || []).filter(c => c.fecha <= fecha);
+  if (conteos.length === 0) return null;
+  return conteos.reduce((a, b) => (`${a.fecha} ${a.hora || ''}` > `${b.fecha} ${b.hora || ''}` ? a : b));
+};
+
+// Suma de todo lo cobrado en efectivo desde (después de) un conteo dado
+// hasta la fecha elegida, inclusive. Si no hay conteo previo, devuelve 0
+// (no se puede calcular "debería tener" sin un punto de partida).
+const cobradoEfectivoDesde = (data, conteo, fechaHasta) => {
+  if (!conteo) return 0;
+  let total = 0;
+  (data.pagos || []).forEach(pago => {
+    if (!(pago.montoEfectivo > 0)) return;
+    if (pago.fechaPago < conteo.fecha || pago.fechaPago > fechaHasta) return;
+    if (pago.fechaPago === conteo.fecha && (pago.horaPago || '') <= (conteo.hora || '')) return;
+    total += pago.montoEfectivo;
+  });
+  (data.alumnosParticulares || []).forEach(p => {
+    (p.pagos || []).forEach(pg => {
+      if (pg.metodo !== 'efectivo') return;
+      if (pg.fecha < conteo.fecha || pg.fecha > fechaHasta) return;
+      if (pg.fecha === conteo.fecha) return; // sin hora registrada: se asume ya incluido en el conteo de ese día
+      total += pg.monto;
+    });
+  });
+  return total;
 };
 
 // Redondea un monto final de cuota a múltiplos de $500, mirando los
@@ -581,6 +648,7 @@ export default function App() {
             {tab === 'pagos' && <PagosTab data={data} update={update} />}
             {tab === 'alumnos' && <AlumnosTab data={data} update={update} />}
             {tab === 'particulares' && <ParticularesTab data={data} update={update} />}
+            {tab === 'caja' && <CajaTab data={data} update={update} />}
             {tab === 'cursos' && <CursosTab data={data} update={update} />}
             {tab === 'config' && <ConfigTab data={data} update={update} />}
           </div>
@@ -611,6 +679,7 @@ function Header({ tab, setTab, nombreInstituto, saveStatus }) {
     { id: 'pagos', label: 'Pagos', icon: CreditCard },
     { id: 'alumnos', label: 'Alumnos', icon: Users },
     { id: 'particulares', label: 'Particulares', icon: Clock },
+    { id: 'caja', label: 'Caja', icon: Wallet },
     { id: 'cursos', label: 'Cursos', icon: BookOpen },
     { id: 'config', label: 'Configuración', icon: Settings }
   ];
@@ -726,6 +795,7 @@ function PagosTab({ data, update }) {
         precioFijado: detalle?.precioFijado || detalle?.monto || 0,
         montoTotal: detalle?.monto || 0, // legacy compat
         metodo: detalle?.metodo || 'efectivo',
+        montoEfectivo: detalle?.montoEfectivo || 0,
         observaciones: ''
       };
     });
@@ -1831,7 +1901,14 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
             metodo: it.metodo,
             precioFijado: it.esSaldo ? null : it.precioTotal, // null = no sobrescribir, mantener el existente
             creditoAplicado: it.creditoAplicado || 0,
-            extraAFavor: it.extraAFavor || 0
+            extraAFavor: it.extraAFavor || 0,
+            // Plata físicamente recibida en efectivo por esta línea (para la Caja).
+            // Si se usó "pago mixto" (efectivo + transferencia/MP repartido en el
+            // mismo cobro), se reparte proporcionalmente según el monto de cada
+            // línea; si no, es exacto según el método de esa línea.
+            montoEfectivo: usaMixto && totales.total > 0
+              ? Math.round(it.monto * (Number(distribuciones.efectivo) || 0) / totales.total)
+              : (it.metodo === 'efectivo' ? it.monto : 0)
           }]))
         ])
       )
@@ -3171,6 +3248,7 @@ function AlumnoCuotasModal({ alumno, data, update, onClose, onEdit }) {
         precioFijado: detalle?.precioFijado || detalle?.monto || 0,
         montoTotal: detalle?.monto || 0,
         metodo: detalle?.metodo || 'efectivo',
+        montoEfectivo: detalle?.montoEfectivo || 0,
         observaciones: ''
       };
     });
@@ -3584,10 +3662,10 @@ function ParticularesTab({ data, update }) {
 
   // Cuenta corriente: registra un pago (no atado a una clase puntual, se aplica
   // automáticamente a las clases más viejas sin cubrir)
-  const registrarPago = (id, fecha, monto) => {
+  const registrarPago = (id, fecha, monto, metodo) => {
     update({
       alumnosParticulares: particulares.map(p =>
-        p.id === id ? { ...p, pagos: [...(p.pagos || []), { id: uid(), fecha, monto: Number(monto) }] } : p
+        p.id === id ? { ...p, pagos: [...(p.pagos || []), { id: uid(), fecha, monto: Number(monto), metodo: metodo || 'efectivo' }] } : p
       )
     });
   };
@@ -3845,7 +3923,7 @@ function ParticularesTab({ data, update }) {
           estadosSesion={ESTADOS_SESION}
           onRegistrar={(fecha, estado) => registrarSesion(viendoPerfil.id, fecha, estado)}
           onQuitar={(fecha) => quitarHistorial(viendoPerfil.id, fecha)}
-          onRegistrarPago={(fecha, monto) => registrarPago(viendoPerfil.id, fecha, monto)}
+          onRegistrarPago={(fecha, monto, metodo) => registrarPago(viendoPerfil.id, fecha, monto, metodo)}
           onQuitarPago={(pagoId) => quitarPago(viendoPerfil.id, pagoId)}
           onReclamar={() => reclamarDeuda(viendoPerfil)}
           onClose={() => setViendoPerfilId(null)}
@@ -3863,6 +3941,7 @@ function ParticularPerfilModal({ particular: p, configuracion, estadosSesion, on
   const [pagando, setPagando] = useState(false);
   const [montoPago, setMontoPago] = useState('');
   const [fechaPago, setFechaPago] = useState(today());
+  const [metodoPago, setMetodoPago] = useState('efectivo');
   const historial = p.historial || [];
   const pagos = p.pagos || [];
   const entrada = historial.find(h => h.fecha === fechaElegida);
@@ -3872,7 +3951,7 @@ function ParticularPerfilModal({ particular: p, configuracion, estadosSesion, on
   const guardarPago = () => {
     const monto = Number(montoPago);
     if (!monto || monto <= 0) return;
-    onRegistrarPago(fechaPago, monto);
+    onRegistrarPago(fechaPago, monto, metodoPago);
     setMontoPago('');
     setPagando(false);
   };
@@ -3927,6 +4006,17 @@ function ParticularPerfilModal({ particular: p, configuracion, estadosSesion, on
                     onChange={e => setFechaPago(e.target.value)}
                     className="mt-0.5 px-2 py-1.5 rounded-lg border border-cream-200 bg-white text-sm"
                   />
+                </div>
+                <div>
+                  <label className="text-xs text-cream-500">Medio</label>
+                  <select
+                    value={metodoPago}
+                    onChange={e => setMetodoPago(e.target.value)}
+                    className="mt-0.5 px-2 py-1.5 rounded-lg border border-cream-200 bg-white text-sm"
+                  >
+                    <option value="efectivo">Efectivo</option>
+                    <option value="transferencia">Transferencia</option>
+                  </select>
                 </div>
                 <button onClick={guardarPago} className="text-sm px-3 py-1.5 bg-gradient-to-b from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 shadow-md shadow-brand-600/25 text-white rounded-lg font-medium">
                   Guardar
@@ -4013,6 +4103,9 @@ function ParticularPerfilModal({ particular: p, configuracion, estadosSesion, on
                   <div key={pg.id} className="flex items-center gap-2 text-xs">
                     <span className="font-medium text-cream-700 w-10">{fmtFechaCorta(pg.fecha)}</span>
                     <span className="text-emerald-700 font-medium">{fmtMoney(pg.monto)}</span>
+                    <span className="text-cream-400">
+                      {pg.metodo === 'efectivo' ? 'efectivo' : pg.metodo === 'transferencia' ? 'transferencia' : 'sin especificar'}
+                    </span>
                     <button
                       onClick={() => onQuitarPago(pg.id)}
                       title="Quitar este pago (si se cargó por error)"
@@ -4171,6 +4264,143 @@ function ParticularForm({ particular, profesoresExistentes, onSave, onClose }) {
             </button>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// CAJA TAB
+// ============================================================
+function CajaTab({ data, update }) {
+  const [fechaSel, setFechaSel] = useState(today());
+  const [cargandoConteo, setCargandoConteo] = useState(false);
+  const [montoConteo, setMontoConteo] = useState('');
+
+  const { items, total } = useMemo(() => cobradoEfectivoDelDia(data, fechaSel), [data, fechaSel]);
+  const conteoVigente = useMemo(() => ultimoConteoHasta(data, fechaSel), [data, fechaSel]);
+  const cobradoDesdeConteo = useMemo(
+    () => cobradoEfectivoDesde(data, conteoVigente, fechaSel),
+    [data, conteoVigente, fechaSel]
+  );
+  const totalEsperado = conteoVigente ? conteoVigente.monto + cobradoDesdeConteo : null;
+
+  const esHoy = fechaSel === today();
+  const cambiarDia = (delta) => {
+    const [y, m, d] = fechaSel.split('-').map(Number);
+    const dt = new Date(y, m - 1, d + delta);
+    setFechaSel(fechaLocal(dt));
+  };
+
+  const guardarConteo = () => {
+    const monto = Number(montoConteo);
+    if (!monto || monto <= 0) return;
+    const nuevoConteo = { id: uid(), fecha: today(), hora: horaActual(), monto };
+    update({ cajaConteos: [...(data.cajaConteos || []), nuevoConteo] });
+    setMontoConteo('');
+    setCargandoConteo(false);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <h2 className="font-display text-2xl font-semibold text-navy-600">Caja</h2>
+        <div className="flex items-center gap-1 bg-white border border-cream-200 rounded-lg px-2 py-1.5">
+          <button onClick={() => cambiarDia(-1)} className="w-7 h-7 rounded-md text-cream-600 hover:bg-cream-100">‹</button>
+          <span className="text-sm font-semibold text-navy-600 px-2">
+            {esHoy ? 'Hoy · ' : ''}{fmtFechaCorta(fechaSel)}
+          </span>
+          <button
+            onClick={() => cambiarDia(1)}
+            disabled={esHoy}
+            className={`w-7 h-7 rounded-md ${esHoy ? 'text-cream-200 cursor-not-allowed' : 'text-cream-600 hover:bg-cream-100'}`}
+          >
+            ›
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+        <div className="bg-white border border-cream-200 rounded-2xl p-5 space-y-2">
+          <div className="text-xs font-semibold uppercase tracking-wider text-cream-600">Último conteo</div>
+          {conteoVigente ? (
+            <>
+              <div className="font-display text-3xl font-semibold text-navy-600">{fmtMoney(conteoVigente.monto)}</div>
+              <div className="text-sm text-cream-600">
+                Cargado el {fmtFechaCorta(conteoVigente.fecha)}{conteoVigente.hora ? `, ${conteoVigente.hora}` : ''}
+              </div>
+            </>
+          ) : (
+            <div className="text-sm text-cream-600">Todavía no cargaste ningún conteo.</div>
+          )}
+          {!cargandoConteo ? (
+            <button
+              onClick={() => setCargandoConteo(true)}
+              className="mt-1 text-sm font-semibold px-3 py-2 border border-cream-300 rounded-lg text-navy-600 hover:bg-cream-50"
+            >
+              {conteoVigente ? 'Actualizar conteo' : 'Cargar mi primer conteo'}
+            </button>
+          ) : (
+            <div className="flex items-end gap-2 flex-wrap pt-1">
+              <div>
+                <label className="text-xs text-cream-500">Efectivo contado ahora</label>
+                <input
+                  type="number"
+                  value={montoConteo}
+                  onChange={e => setMontoConteo(e.target.value)}
+                  placeholder="$"
+                  className="block mt-0.5 px-2 py-1.5 rounded-lg border border-cream-300 bg-white text-sm w-32"
+                  autoFocus
+                />
+              </div>
+              <button onClick={guardarConteo} className="text-sm px-3 py-1.5 bg-gradient-to-b from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 shadow-md shadow-brand-600/25 text-white rounded-lg font-medium">
+                Guardar
+              </button>
+              <button onClick={() => { setCargandoConteo(false); setMontoConteo(''); }} className="text-sm px-3 py-1.5 text-cream-500 hover:text-cream-700">
+                Cancelar
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="bg-cream-50 border border-cream-300 rounded-2xl p-5 space-y-2">
+          <div className="text-xs font-semibold uppercase tracking-wider text-cream-700">Deberías tener ahora</div>
+          {totalEsperado != null ? (
+            <>
+              <div className="font-display text-3xl font-semibold text-emerald-700">{fmtMoney(totalEsperado)}</div>
+              <div className="text-sm text-cream-700">
+                Conteo {fmtMoney(conteoVigente.monto)} + cobrado desde entonces {fmtMoney(cobradoDesdeConteo)}
+              </div>
+            </>
+          ) : (
+            <div className="text-sm text-cream-600">Cargá un conteo para ver este número.</div>
+          )}
+        </div>
+      </div>
+
+      <div className="bg-white border border-cream-200 rounded-2xl overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-cream-200">
+          <span className="text-sm font-semibold text-navy-600">Cobrado en efectivo {esHoy ? 'hoy' : 'ese día'}</span>
+          <span className="font-display text-xl font-bold text-emerald-700">{fmtMoney(total)}</span>
+        </div>
+        {items.length === 0 ? (
+          <div className="px-5 py-6 text-sm text-cream-500">Sin cobros en efectivo registrados para este día.</div>
+        ) : (
+          items.map(it => (
+            <div key={it.id} className="flex items-center gap-4 px-5 py-3.5 border-b border-cream-100 last:border-b-0">
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold text-navy-600 truncate">{it.nombre}</div>
+                <div className="text-xs text-cream-500">{it.concepto}</div>
+              </div>
+              <span className="text-xs text-cream-400 w-12">{it.hora}</span>
+              <span className="text-sm font-semibold text-navy-600 w-24 text-right">{fmtMoney(it.monto)}</span>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="text-xs text-cream-500 italic px-1">
+        Esta pantalla solo suma lo que ya cobraste — no cambia ningún dato de alumnos, cuotas ni pagos.
       </div>
     </div>
   );
