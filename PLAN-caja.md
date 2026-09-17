@@ -1,6 +1,7 @@
 # Plan: Caja (control de efectivo del día)
 
-Estado: **planificado, no implementado todavía**. No tocar código hasta que Juan Cruz confirme empezar.
+Estado: **implementado** (pestaña "Caja" en la app). Ver commit
+"Implementar pestaña Caja (control de efectivo diario)".
 
 ## Contexto / por qué
 
