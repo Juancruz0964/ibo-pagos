@@ -1830,7 +1830,7 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
     if (items.length > 1) {
       const renglones = [];
       totalesItems.forEach(it => {
-        let linea = `*${it.periodo.full}*: ${fmtMoney(it.monto)} (pago completo)`;
+        let linea = `*${it.periodo.full}*: ${fmtMoney(it.monto)}`;
         if (it.creditoAplicado > 0) linea += ` — se descontaron ${fmtMoney(it.creditoAplicado)} de saldo a favor`;
         if (it.extraAFavor > 0) linea += ` — quedan ${fmtMoney(it.extraAFavor)} a favor`;
         renglones.push(linea);
@@ -1841,7 +1841,7 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
       saldos.forEach(it => {
         renglones.push(`*${it.periodo.full}*: ${fmtMoney(it.monto)} — saldo saldado ✓`);
       });
-      return `Hola, ${nombreContacto}! Te confirmamos en ${inst}:\n${renglones.join('\n')}\n¡Muchas gracias!`;
+      return `Hola, ${nombreContacto}! Te confirmamos los siguientes pagos en ${inst}:\n${renglones.join('\n')}\n¡Muchas gracias!`;
     }
 
     const partes = [];
