@@ -1841,7 +1841,8 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
       saldos.forEach(it => {
         renglones.push(`*${it.periodo.full}*: ${fmtMoney(it.monto)} — saldo saldado ✓`);
       });
-      return `Hola, ${nombreContacto}! Te confirmamos los siguientes pagos en ${inst}:\n${renglones.join('\n')}\n¡Muchas gracias!`;
+      const totalCobrado = items.reduce((s, it) => s + it.monto, 0);
+      return `Hola, ${nombreContacto}! Te confirmamos los siguientes pagos en ${inst}:\n${renglones.join('\n')}\nTotal: ${fmtMoney(totalCobrado)}\n¡Muchas gracias!`;
     }
 
     const partes = [];
