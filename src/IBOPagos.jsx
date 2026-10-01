@@ -1894,6 +1894,8 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
       return itemsAlumno.map(it => {
         if (it.modalidad === 'parcial') return `• ${a.nombre}: pago parcial de ${mesTexto(it.periodo)} (${fmtMoney(it.monto)}, saldo pendiente: ${fmtMoney(it.saldoRestante)})`;
         if (it.modalidad === 'saldo') return `• ${a.nombre}: saldo de ${mesTexto(it.periodo)} (${fmtMoney(it.monto)}) — cuota saldada ✓`;
+        if (it.creditoAplicado > 0) return `• ${a.nombre}: ${mesTexto(it.periodo)} (cuota ${fmtMoney(it.precioTotal)}, se descontaron ${fmtMoney(it.creditoAplicado)} de saldo a favor — abonó ${fmtMoney(it.monto)})`;
+        if (it.extraAFavor > 0) return `• ${a.nombre}: ${mesTexto(it.periodo)} (cuota ${fmtMoney(it.precioTotal)}, abonó ${fmtMoney(it.monto)} — quedan ${fmtMoney(it.extraAFavor)} a favor)`;
         return `• ${a.nombre}: ${mesTexto(it.periodo)} (${fmtMoney(it.monto)})`;
       }).join('\n');
     }).join('\n');
