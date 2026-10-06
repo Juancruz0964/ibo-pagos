@@ -13,6 +13,31 @@ import {
 // ============================================================
 const GAS_URL = import.meta.env.VITE_GAS_URL || '';
 
+// Compara dos valores en profundidad, sin importar el orden de las claves de
+// los objetos (el servidor reconstruye los datos guardados en un orden de
+// claves distinto al que tiene React en la pantalla, así que comparar como
+// texto con JSON.stringify da "distinto" aunque el contenido sea idéntico).
+const sonIguales = (a, b) => {
+  if (a === b) return true;
+  if (typeof a !== typeof b || a === null || b === null) return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  if (Array.isArray(a)) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) if (!sonIguales(a[i], b[i])) return false;
+    return true;
+  }
+  if (typeof a === 'object') {
+    const keysA = Object.keys(a), keysB = Object.keys(b);
+    if (keysA.length !== keysB.length) return false;
+    for (const k of keysA) {
+      if (!Object.prototype.hasOwnProperty.call(b, k)) return false;
+      if (!sonIguales(a[k], b[k])) return false;
+    }
+    return true;
+  }
+  return false;
+};
+
 const storage = {
   async get(key) {
     if (!GAS_URL) {
@@ -54,8 +79,7 @@ const storage = {
       const res = await fetch(`${GAS_URL}?action=load`, { cache: 'no-store' });
       const json = await res.json();
       if (!json.ok) return { ok: false, error: 'No se pudo confirmar el guardado' };
-      const coincide = JSON.stringify(json.data) === JSON.stringify(value);
-      return coincide ? { ok: true } : { ok: false, error: 'El guardado no se reflejó en el servidor' };
+      return sonIguales(json.data, value) ? { ok: true } : { ok: false, error: 'El guardado no se reflejó en el servidor' };
     } catch (e) {
       console.error('Error al confirmar guardado en Sheets:', e);
       return { ok: false, error: e.message };
