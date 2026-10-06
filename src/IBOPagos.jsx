@@ -528,6 +528,13 @@ export default function App() {
   const [saveStatus, setSaveStatus] = useState('idle'); // 'idle' | 'pending' | 'saving' | 'saved' | 'error'
   const saveTimer = useRef(null);
   const retryTimer = useRef(null);
+  // Evita que dos guardados viajen en paralelo: el POST a Apps Script puede
+  // tardar varios segundos, y si se dispara uno nuevo antes de que el
+  // anterior termine, el que llega más tarde al servidor puede pisar al que
+  // llegó antes con datos más viejos. Mientras guardandoRef sea true, un
+  // cambio nuevo en "data" no dispara otro guardado en paralelo: se guarda
+  // solo (via dataRef, que siempre tiene lo último) cuando el actual termine.
+  const guardandoRef = useRef(false);
   const saveStatusRef = useRef(saveStatus);
   useEffect(() => { saveStatusRef.current = saveStatus; }, [saveStatus]);
 
@@ -588,15 +595,30 @@ export default function App() {
     if (!loaded || loadFailed) return;
     setSaveStatus('pending');
     clearTimeout(saveTimer.current);
-    clearTimeout(retryTimer.current);
+
+    // Si ya hay un guardado en curso (o reintentando), no dispares otro en
+    // paralelo: dataRef ya tiene este cambio nuevo, así que en cuanto el que
+    // está en vuelo termine, va a notar que hay algo más fresco y lo manda
+    // él mismo — ver el final de intentarGuardar.
+    if (guardandoRef.current) return;
 
     // Si falla el guardado (típicamente por falta de conexión a internet en
     // ese momento), reintenta solo cada vez más espaciado hasta lograrlo, en
     // vez de quedarse en "Error al guardar" esperando que alguien lo note.
     const intentarGuardar = (intento) => {
+      guardandoRef.current = true;
+      const dataAGuardar = dataRef.current;
       setSaveStatus(intento === 0 ? 'saving' : 'reintentando');
-      storage.set('ibo_data', data).then(result => {
+      storage.set('ibo_data', dataAGuardar).then(result => {
         if (result.ok) {
+          if (dataRef.current !== dataAGuardar) {
+            // Mientras este guardado viajaba, hubo cambios nuevos (otro
+            // cobro, otra edición): mandarlos ya mismo, sin esperar el
+            // debounce, para no acumular atraso.
+            intentarGuardar(0);
+            return;
+          }
+          guardandoRef.current = false;
           setSaveStatus('saved');
           setTimeout(() => setSaveStatus('idle'), 2500);
         } else {
@@ -608,8 +630,14 @@ export default function App() {
     };
 
     saveTimer.current = setTimeout(() => intentarGuardar(0), GAS_URL ? 1500 : 0);
-    return () => { clearTimeout(saveTimer.current); clearTimeout(retryTimer.current); };
+    return () => clearTimeout(saveTimer.current);
   }, [data, loaded, loadFailed]);
+
+  // Al desmontar de verdad (no en cada cambio de "data"), cancelar cualquier
+  // timer de guardado/reintento pendiente.
+  useEffect(() => {
+    return () => { clearTimeout(saveTimer.current); clearTimeout(retryTimer.current); };
+  }, []);
 
   // Avisar antes de cerrar/recargar la pestaña si hay algo sin guardar
   // todavía (evita perder un cobro por cerrar demasiado rápido)

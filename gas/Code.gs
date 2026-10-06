@@ -166,6 +166,24 @@ function sincronizarPestanas(ss, data) {
 
   var anioActual = new Date().getFullYear();
 
+  // Índices armados una sola vez para toda la función (antes se buscaba
+  // "a mano" el alumno de cada pago, recorriendo la lista completa de
+  // alumnos, una vez POR CADA pago Y por cada curso -- con años de pagos
+  // acumulados eso se volvía muy lento). Ahora cada pago se ubica en O(1).
+  var alumnoPorId = {};
+  data.alumnos.forEach(function(a) { alumnoPorId[a.id] = a; });
+
+  var pagosPorCursoYKey = {};
+  data.pagos.forEach(function(pago) {
+    var alumno = alumnoPorId[pago.alumnoId];
+    if (!alumno) return;
+    var cursoId = alumno.cursoId;
+    if (!pagosPorCursoYKey[cursoId]) pagosPorCursoYKey[cursoId] = {};
+    var k = pago.alumnoId + '|' + pago.anio;
+    if (!pagosPorCursoYKey[cursoId][k]) pagosPorCursoYKey[cursoId][k] = [];
+    pagosPorCursoYKey[cursoId][k].push(pago);
+  });
+
   data.cursos.forEach(function(curso) {
     // Obtener o crear la pestaña con el nombre del curso
     var hoja = ss.getSheetByName(curso.nombre);
@@ -180,17 +198,7 @@ function sincronizarPestanas(ss, data) {
     });
 
     // Pagos de este curso agrupados por "alumnoId|anio"
-    var pagosPorKey = {};
-    data.pagos.forEach(function(pago) {
-      var alumno = null;
-      for (var i = 0; i < data.alumnos.length; i++) {
-        if (data.alumnos[i].id === pago.alumnoId) { alumno = data.alumnos[i]; break; }
-      }
-      if (!alumno || alumno.cursoId !== curso.id) return;
-      var k = pago.alumnoId + '|' + pago.anio;
-      if (!pagosPorKey[k]) pagosPorKey[k] = [];
-      pagosPorKey[k].push(pago);
-    });
+    var pagosPorKey = pagosPorCursoYKey[curso.id] || {};
 
     // Combinaciones (alumno, año) a mostrar
     var combinaciones = {};
@@ -207,10 +215,7 @@ function sincronizarPestanas(ss, data) {
       var partes = k.split('|');
       var alumnoId = partes[0];
       var anio = parseInt(partes[1]);
-      var alumno = null;
-      for (var i = 0; i < data.alumnos.length; i++) {
-        if (data.alumnos[i].id === alumnoId) { alumno = data.alumnos[i]; break; }
-      }
+      var alumno = alumnoPorId[alumnoId];
       if (alumno) combinaciones[k] = { alumno: alumno, anio: anio };
     });
 
