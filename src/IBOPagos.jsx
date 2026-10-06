@@ -41,9 +41,23 @@ const storage = {
         mode: 'no-cors',
         body: JSON.stringify({ action: 'save', data: value }),
       });
-      return { ok: true };
     } catch (e) {
       console.error('Error al guardar datos en Sheets:', e);
+      return { ok: false, error: e.message };
+    }
+    // mode: 'no-cors' no deja leer la respuesta real del POST (puede fallar
+    // en el servidor y la promesa igual resuelve como si nada), así que
+    // confirmamos el guardado volviendo a leer y comparando contra lo que
+    // mandamos. Si no coincide, se trata como un guardado fallido y dispara
+    // el reintento ya existente, en vez de mostrar "Guardado ✓" en falso.
+    try {
+      const res = await fetch(`${GAS_URL}?action=load`, { cache: 'no-store' });
+      const json = await res.json();
+      if (!json.ok) return { ok: false, error: 'No se pudo confirmar el guardado' };
+      const coincide = JSON.stringify(json.data) === JSON.stringify(value);
+      return coincide ? { ok: true } : { ok: false, error: 'El guardado no se reflejó en el servidor' };
+    } catch (e) {
+      console.error('Error al confirmar guardado en Sheets:', e);
       return { ok: false, error: e.message };
     }
   }
