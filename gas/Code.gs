@@ -106,7 +106,7 @@ function saveData(ss, data) {
   if (!sheet) sheet = ss.insertSheet(SHEET_NAME);
 
   var rows = [];
-  var simpleKeys = ['cursos', 'configuracion', 'gruposFamiliares', 'promociones', 'alumnosParticulares'];
+  var simpleKeys = ['cursos', 'configuracion', 'gruposFamiliares', 'promociones', 'alumnosParticulares', 'cajaConteos'];
 
   simpleKeys.forEach(function(key) {
     if (data[key] !== undefined) {
