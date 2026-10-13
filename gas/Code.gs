@@ -62,7 +62,12 @@ function doPost(e) {
 
     if (body.action === 'save') {
       return conCandado(function() {
-        saveData(ss, body.data);
+        // false = ignorar pagos/cajaConteos pase lo que pase, aunque esta
+        // llamada venga de una versión VIEJA de la app que todavía los
+        // mande como parte del guardado general (no sabe que ahora se
+        // manejan aparte). Blindaje permanente, no depende de que todos
+        // los dispositivos estén actualizados.
+        saveData(ss, body.data, false);
         return jsonResponse({ ok: true });
       });
     }
@@ -79,7 +84,7 @@ function doPost(e) {
         (data.pagos || []).forEach(function(p) { existentes[p.id] = true; });
         var nuevos = (body.pagos || []).filter(function(p) { return !existentes[p.id]; });
         data.pagos = (data.pagos || []).concat(nuevos);
-        saveData(ss, data);
+        saveData(ss, data, true); // true = esta sí trae pagos actualizados a propósito
         return jsonResponse({ ok: true });
       });
     }
@@ -88,7 +93,7 @@ function doPost(e) {
       return conCandado(function() {
         var data = loadData(ss) || {};
         data.pagos = (data.pagos || []).filter(function(p) { return p.id !== body.pagoId; });
-        saveData(ss, data);
+        saveData(ss, data, true);
         return jsonResponse({ ok: true });
       });
     }
@@ -99,7 +104,7 @@ function doPost(e) {
         var yaExiste = (data.cajaConteos || []).some(function(c) { return c.id === body.conteo.id; });
         if (!yaExiste) {
           data.cajaConteos = (data.cajaConteos || []).concat([body.conteo]);
-          saveData(ss, data);
+          saveData(ss, data, true);
         }
         return jsonResponse({ ok: true });
       });
@@ -158,21 +163,31 @@ function loadData(ss) {
 
 var TODAS_LAS_CLAVES = ['cursos', 'configuracion', 'gruposFamiliares', 'promociones', 'alumnosParticulares', 'cajaConteos', 'pagos', 'alumnos', 'preciosCuotas'];
 
-function saveData(ss, data) {
+function saveData(ss, data, permitirPagosYCaja) {
   var sheet = ss.getSheetByName(SHEET_NAME);
   if (!sheet) sheet = ss.insertSheet(SHEET_NAME);
 
-  // El guardado general ya no manda pagos ni cajaConteos (esos se agregan
-  // aparte, ver doPost). Si falta alguna clave en "data", se completa con lo
-  // que YA HAY guardado en la hoja en este momento, para no borrarla sin
-  // querer al escribir por posición de fila.
-  var faltaAlgo = TODAS_LAS_CLAVES.some(function(k) { return data[k] === undefined; });
+  // pagos y cajaConteos solo se escriben cuando quien llama es una de las
+  // acciones aditivas (permitirPagosYCaja=true), que arman "data" leyendo
+  // lo que ya hay y sumando lo puntual. El guardado general (false) los
+  // ignora SIEMPRE, sin importar qué traiga "data" en esos dos campos --
+  // así, aunque quede una pestaña con una versión vieja de la app todavía
+  // mandando pagos como parte del guardado general, no puede tocarlos.
+  var necesitaCompletar = TODAS_LAS_CLAVES.some(function(k) {
+    if ((k === 'pagos' || k === 'cajaConteos') && !permitirPagosYCaja) return true;
+    return data[k] === undefined;
+  });
   var completo = data;
-  if (faltaAlgo) {
+  if (necesitaCompletar) {
     var actual = loadData(ss) || {};
     completo = {};
     TODAS_LAS_CLAVES.forEach(function(k) {
-      completo[k] = data[k] !== undefined ? data[k] : actual[k];
+      var esAditiva = (k === 'pagos' || k === 'cajaConteos');
+      if (esAditiva && !permitirPagosYCaja) {
+        completo[k] = actual[k];
+      } else {
+        completo[k] = data[k] !== undefined ? data[k] : actual[k];
+      }
     });
   }
 
@@ -573,7 +588,7 @@ function migrarDesdeSheetManual() {
   if (!DRY_RUN && newPagos.length > 0) {
     var updatedData = loadData(ss);
     updatedData.pagos = (updatedData.pagos || []).concat(newPagos);
-    saveData(ss, updatedData);
+    saveData(ss, updatedData, true);
   }
 
   var lines = tabLog.concat(['',
