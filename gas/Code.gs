@@ -42,14 +42,69 @@ function doGet(e) {
   }
 }
 
+// Todo doPost corre adentro de este candado: así, aunque lleguen dos
+// pedidos de guardado exactamente al mismo instante (desde dos pantallas
+// distintas), Google los procesa de a uno — nunca se cruzan ni se pisan.
+function conCandado(fn) {
+  var candado = LockService.getScriptLock();
+  candado.waitLock(30000);
+  try {
+    return fn();
+  } finally {
+    candado.releaseLock();
+  }
+}
+
 function doPost(e) {
   try {
     var body = JSON.parse(e.postData.contents);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+
     if (body.action === 'save') {
-      var ss = SpreadsheetApp.getActiveSpreadsheet();
-      saveData(ss, body.data);
-      return jsonResponse({ ok: true });
+      return conCandado(function() {
+        saveData(ss, body.data);
+        return jsonResponse({ ok: true });
+      });
     }
+
+    // Acciones ADITIVAS: en vez de mandar "toda la base de datos" (que puede
+    // pisar lo que otra pantalla acaba de agregar), estas piden "agregá esto
+    // puntual" — el servidor lee lo que ya hay, le suma lo nuevo, y guarda.
+    // Como corre adentro del candado, es imposible que dos de estas (o una de
+    // estas y un guardado general) se crucen.
+    if (body.action === 'agregarPagos') {
+      return conCandado(function() {
+        var data = loadData(ss) || {};
+        var existentes = {};
+        (data.pagos || []).forEach(function(p) { existentes[p.id] = true; });
+        var nuevos = (body.pagos || []).filter(function(p) { return !existentes[p.id]; });
+        data.pagos = (data.pagos || []).concat(nuevos);
+        saveData(ss, data);
+        return jsonResponse({ ok: true });
+      });
+    }
+
+    if (body.action === 'eliminarPago') {
+      return conCandado(function() {
+        var data = loadData(ss) || {};
+        data.pagos = (data.pagos || []).filter(function(p) { return p.id !== body.pagoId; });
+        saveData(ss, data);
+        return jsonResponse({ ok: true });
+      });
+    }
+
+    if (body.action === 'agregarConteoCaja') {
+      return conCandado(function() {
+        var data = loadData(ss) || {};
+        var yaExiste = (data.cajaConteos || []).some(function(c) { return c.id === body.conteo.id; });
+        if (!yaExiste) {
+          data.cajaConteos = (data.cajaConteos || []).concat([body.conteo]);
+          saveData(ss, data);
+        }
+        return jsonResponse({ ok: true });
+      });
+    }
+
     return jsonResponse({ ok: false, error: 'Acción desconocida' });
   } catch (err) {
     return jsonResponse({ ok: false, error: err.toString() });
@@ -101,22 +156,38 @@ function loadData(ss) {
   return result;
 }
 
+var TODAS_LAS_CLAVES = ['cursos', 'configuracion', 'gruposFamiliares', 'promociones', 'alumnosParticulares', 'cajaConteos', 'pagos', 'alumnos', 'preciosCuotas'];
+
 function saveData(ss, data) {
   var sheet = ss.getSheetByName(SHEET_NAME);
   if (!sheet) sheet = ss.insertSheet(SHEET_NAME);
+
+  // El guardado general ya no manda pagos ni cajaConteos (esos se agregan
+  // aparte, ver doPost). Si falta alguna clave en "data", se completa con lo
+  // que YA HAY guardado en la hoja en este momento, para no borrarla sin
+  // querer al escribir por posición de fila.
+  var faltaAlgo = TODAS_LAS_CLAVES.some(function(k) { return data[k] === undefined; });
+  var completo = data;
+  if (faltaAlgo) {
+    var actual = loadData(ss) || {};
+    completo = {};
+    TODAS_LAS_CLAVES.forEach(function(k) {
+      completo[k] = data[k] !== undefined ? data[k] : actual[k];
+    });
+  }
 
   var rows = [];
   var simpleKeys = ['cursos', 'configuracion', 'gruposFamiliares', 'promociones', 'alumnosParticulares', 'cajaConteos'];
 
   simpleKeys.forEach(function(key) {
-    if (data[key] !== undefined) {
-      rows.push([key, JSON.stringify(data[key])]);
+    if (completo[key] !== undefined) {
+      rows.push([key, JSON.stringify(completo[key])]);
     }
   });
 
   CHUNKED_KEYS.forEach(function(key) {
-    if (data[key] === undefined) return;
-    var json = JSON.stringify(data[key]);
+    if (completo[key] === undefined) return;
+    var json = JSON.stringify(completo[key]);
     var nChunks = Math.ceil(json.length / CHUNK_SIZE) || 1;
     for (var i = 0; i < nChunks; i++) {
       var chunkKey = i === 0 ? key : key + '_' + i;
@@ -128,7 +199,7 @@ function saveData(ss, data) {
 
   // Actualizar pestañas legibles de cada curso
   try {
-    sincronizarPestanas(ss, data);
+    sincronizarPestanas(ss, completo);
   } catch (err) {
     // No fallar el guardado si la sincronización de pestañas falla
     console.log('Error sincronizando pestañas: ' + err.toString());

@@ -38,6 +38,16 @@ const sonIguales = (a, b) => {
   return false;
 };
 
+// Copia superficial de un objeto sin las claves indicadas (para armar el
+// payload del guardado general y para comparar, sin tocar pagos/cajaConteos:
+// esos dos viajan aparte, ver storage.agregarPagos/agregarConteoCaja).
+const omitir = (obj, claves) => {
+  const copia = { ...obj };
+  claves.forEach(k => delete copia[k]);
+  return copia;
+};
+const CLAVES_ADITIVAS = ['pagos', 'cajaConteos'];
+
 const storage = {
   async get(key) {
     if (!GAS_URL) {
@@ -60,11 +70,17 @@ const storage = {
       try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
       return { ok: true };
     }
+    // pagos y cajaConteos NUNCA viajan en el guardado general: se agregan
+    // aparte (storage.agregarPagos / agregarConteoCaja) para que dos
+    // pantallas puedan sumar cosas al mismo tiempo sin pisarse. Si este
+    // guardado mandara una copia local (posiblemente vieja) de esos campos,
+    // podría borrar algo que otra pantalla acababa de agregar.
+    const payload = omitir(value, CLAVES_ADITIVAS);
     try {
       await fetch(GAS_URL, {
         method: 'POST',
         mode: 'no-cors',
-        body: JSON.stringify({ action: 'save', data: value }),
+        body: JSON.stringify({ action: 'save', data: payload }),
       });
     } catch (e) {
       console.error('Error al guardar datos en Sheets:', e);
@@ -79,11 +95,62 @@ const storage = {
       const res = await fetch(`${GAS_URL}?action=load`, { cache: 'no-store' });
       const json = await res.json();
       if (!json.ok) return { ok: false, error: 'No se pudo confirmar el guardado' };
-      return sonIguales(json.data, value) ? { ok: true } : { ok: false, error: 'El guardado no se reflejó en el servidor' };
+      const servidor = omitir(json.data, CLAVES_ADITIVAS);
+      return sonIguales(servidor, payload) ? { ok: true } : { ok: false, error: 'El guardado no se reflejó en el servidor' };
     } catch (e) {
       console.error('Error al confirmar guardado en Sheets:', e);
       return { ok: false, error: e.message };
     }
+  },
+
+  // Operación compartida por las acciones aditivas: manda la orden puntual
+  // ("agregá esto") y después confirma leyendo de nuevo, pero en vez de
+  // comparar TODO el contenido (que cambiaría si otra pantalla agregó algo
+  // distinto mientras tanto, dando un falso error), solo chequea que lo que
+  // quisimos agregar ya esté presente en el servidor.
+  async _postYVerificar(body, yaEsta) {
+    try {
+      await fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(body) });
+    } catch (e) {
+      console.error('Error de red:', e);
+      return { ok: false, error: e.message };
+    }
+    try {
+      const res = await fetch(`${GAS_URL}?action=load`, { cache: 'no-store' });
+      const json = await res.json();
+      if (!json.ok) return { ok: false, error: 'No se pudo confirmar' };
+      return yaEsta(json.data) ? { ok: true } : { ok: false, error: 'No se reflejó en el servidor' };
+    } catch (e) {
+      console.error('Error al confirmar:', e);
+      return { ok: false, error: e.message };
+    }
+  },
+
+  async agregarPagos(pagos) {
+    if (!GAS_URL) return { ok: true }; // modo local: ya quedó en localStorage con el guardado general
+    return storage._postYVerificar(
+      { action: 'agregarPagos', pagos },
+      (servidor) => {
+        const idsServidor = new Set((servidor.pagos || []).map(p => p.id));
+        return pagos.every(p => idsServidor.has(p.id));
+      }
+    );
+  },
+
+  async eliminarPago(pagoId) {
+    if (!GAS_URL) return { ok: true };
+    return storage._postYVerificar(
+      { action: 'eliminarPago', pagoId },
+      (servidor) => !(servidor.pagos || []).some(p => p.id === pagoId)
+    );
+  },
+
+  async agregarConteoCaja(conteo) {
+    if (!GAS_URL) return { ok: true };
+    return storage._postYVerificar(
+      { action: 'agregarConteoCaja', conteo },
+      (servidor) => (servidor.cajaConteos || []).some(c => c.id === conteo.id)
+    );
   }
 };
 
@@ -535,6 +602,13 @@ export default function App() {
   // cambio nuevo en "data" no dispara otro guardado en paralelo: se guarda
   // solo (via dataRef, que siempre tiene lo último) cuando el actual termine.
   const guardandoRef = useRef(false);
+  // Cuántas operaciones aditivas (agregar pago, borrar pago, agregar conteo
+  // de caja) están en vuelo ahora mismo. A diferencia del guardado general,
+  // estas SÍ pueden viajar varias a la vez sin problema (el servidor las
+  // procesa de a una con un candado y nunca se pisan) — este contador es
+  // solo para que el cartelito de "Guardado ✓" no aparezca prematuramente
+  // mientras alguna todavía sigue reintentando.
+  const aditivasEnVueloRef = useRef(0);
   const saveStatusRef = useRef(saveStatus);
   useEffect(() => { saveStatusRef.current = saveStatus; }, [saveStatus]);
 
@@ -619,8 +693,7 @@ export default function App() {
             return;
           }
           guardandoRef.current = false;
-          setSaveStatus('saved');
-          setTimeout(() => setSaveStatus('idle'), 2500);
+          marcarGuardadoSiNoQuedaNada();
         } else {
           setSaveStatus('error');
           const espera = Math.min(30000, 3000 * Math.pow(2, intento));
@@ -632,6 +705,48 @@ export default function App() {
     saveTimer.current = setTimeout(() => intentarGuardar(0), GAS_URL ? 1500 : 0);
     return () => clearTimeout(saveTimer.current);
   }, [data, loaded, loadFailed]);
+
+  // Solo marca "Guardado ✓" (y después "idle") cuando de verdad no queda
+  // nada en vuelo -- ni el guardado general ni ninguna operación aditiva.
+  // Si marcara "guardado" mientras alguna todavía reintenta, el cartel
+  // mentiría por un rato, igual que pasaba antes de blindar esto.
+  const marcarGuardadoSiNoQuedaNada = () => {
+    if (guardandoRef.current || aditivasEnVueloRef.current > 0) return;
+    setSaveStatus('saved');
+    setTimeout(() => setSaveStatus(s => (s === 'saved' ? 'idle' : s)), 2500);
+  };
+
+  // Agregar un pago, borrar un pago, o agregar un conteo de Caja no esperan
+  // al guardado general ni se bloquean entre sí: cada una viaja apenas pasa
+  // algo, con su propio reintento, y el servidor (con el candado) se encarga
+  // de que nunca se pisen entre pantallas distintas ni con el guardado
+  // general. Devuelve una promesa que resuelve cuando termina de verdad
+  // (útil si algún llamador quiere esperarla), pero no hace falta usarla.
+  const operacionAditiva = (ejecutar) => {
+    aditivasEnVueloRef.current++;
+    setSaveStatus(s => (s === 'idle' ? 'saving' : s));
+    return new Promise((resolve) => {
+      const intentar = (intento) => {
+        if (intento > 0) setSaveStatus('reintentando');
+        ejecutar().then(result => {
+          if (result.ok) {
+            aditivasEnVueloRef.current--;
+            marcarGuardadoSiNoQuedaNada();
+            resolve(result);
+          } else {
+            setSaveStatus('error');
+            const espera = Math.min(30000, 3000 * Math.pow(2, intento));
+            setTimeout(() => intentar(intento + 1), espera);
+          }
+        });
+      };
+      intentar(0);
+    });
+  };
+
+  const guardarPagosNuevos = (pagos) => operacionAditiva(() => storage.agregarPagos(pagos));
+  const borrarPagoDelServidor = (pagoId) => operacionAditiva(() => storage.eliminarPago(pagoId));
+  const guardarConteoNuevo = (conteo) => operacionAditiva(() => storage.agregarConteoCaja(conteo));
 
   // Al desmontar de verdad (no en cada cambio de "data"), cancelar cualquier
   // timer de guardado/reintento pendiente.
@@ -722,10 +837,10 @@ export default function App() {
             </div>
           )}
           <div className="mt-6">
-            {tab === 'pagos' && <PagosTab data={data} update={update} />}
-            {tab === 'alumnos' && <AlumnosTab data={data} update={update} />}
+            {tab === 'pagos' && <PagosTab data={data} update={update} guardarPagosNuevos={guardarPagosNuevos} borrarPagoDelServidor={borrarPagoDelServidor} />}
+            {tab === 'alumnos' && <AlumnosTab data={data} update={update} guardarPagosNuevos={guardarPagosNuevos} borrarPagoDelServidor={borrarPagoDelServidor} />}
             {tab === 'particulares' && <ParticularesTab data={data} update={update} />}
-            {tab === 'caja' && <CajaTab data={data} update={update} />}
+            {tab === 'caja' && <CajaTab data={data} update={update} guardarConteoNuevo={guardarConteoNuevo} />}
             {tab === 'cursos' && <CursosTab data={data} update={update} />}
             {tab === 'config' && <ConfigTab data={data} update={update} />}
           </div>
@@ -802,7 +917,7 @@ function Header({ tab, setTab, nombreInstituto, saveStatus }) {
 // ============================================================
 // PAGOS TAB
 // ============================================================
-function PagosTab({ data, update }) {
+function PagosTab({ data, update, guardarPagosNuevos, borrarPagoDelServidor }) {
   const [query, setQuery] = useState('');
   const [selectedAlumnoId, setSelectedAlumnoId] = useState(null);
   const [selectedPeriodos, setSelectedPeriodos] = useState([]); // {alumnoId, periodoId, anio}
@@ -889,6 +1004,10 @@ function PagosTab({ data, update }) {
       ? data.alumnos
       : data.alumnos.map(a => deltaSaldoPorAlumno[a.id] ? { ...a, saldoAFavor: Math.max(0, (a.saldoAFavor || 0) + deltaSaldoPorAlumno[a.id]) } : a);
     update({ pagos: [...data.pagos, ...newPagos], alumnos: alumnosActualizados });
+    // Los pagos en sí viajan aparte (ver storage.agregarPagos): así, si dos
+    // pantallas cobran casi al mismo tiempo, ninguna le borra el pago a la
+    // otra -- el servidor las va sumando una por una.
+    guardarPagosNuevos(newPagos);
   };
 
   const saveAlumnoFromPagos = (alumno) => {
@@ -912,6 +1031,7 @@ function PagosTab({ data, update }) {
 
   const eliminarPago = (pagoId) => {
     update({ pagos: data.pagos.filter(p => p.id !== pagoId) });
+    borrarPagoDelServidor(pagoId);
     setPagoView(null);
   };
 
@@ -2490,7 +2610,7 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
 // ============================================================
 // ALUMNOS TAB
 // ============================================================
-function AlumnosTab({ data, update }) {
+function AlumnosTab({ data, update, guardarPagosNuevos, borrarPagoDelServidor }) {
   const [subTab, setSubTab] = useState('lista'); // 'lista' | 'grupos' | 'inactivos'
   const [editing, setEditing] = useState(null);
   const [completando, setCompletando] = useState(null);
@@ -2715,6 +2835,8 @@ function AlumnosTab({ data, update }) {
               alumno={viendoCuotas}
               data={data}
               update={update}
+              guardarPagosNuevos={guardarPagosNuevos}
+              borrarPagoDelServidor={borrarPagoDelServidor}
               onClose={() => setViendoCuotasId(null)}
               onEdit={() => { setEditing(viendoCuotas); setViendoCuotasId(null); }}
             />
@@ -3267,7 +3389,7 @@ function AlumnoForm({ alumno, data, update, onSave, onClose }) {
 // Panel de cuotas de un alumno, accesible desde la solapa Alumnos: permite
 // ver el estado de cada cuota (con fecha y método de pago al ver el detalle)
 // y cobrar directamente, reutilizando los mismos componentes de Pagos.
-function AlumnoCuotasModal({ alumno, data, update, onClose, onEdit }) {
+function AlumnoCuotasModal({ alumno, data, update, onClose, onEdit, guardarPagosNuevos, borrarPagoDelServidor }) {
   const curso = data.cursos.find(c => c.id === alumno.cursoId);
   const [anio, setAnio] = useState(new Date().getFullYear());
   const [selectedPeriodos, setSelectedPeriodos] = useState([]);
@@ -3295,6 +3417,7 @@ function AlumnoCuotasModal({ alumno, data, update, onClose, onEdit }) {
 
   const eliminarPago = (pagoId) => {
     update({ pagos: data.pagos.filter(p => p.id !== pagoId) });
+    borrarPagoDelServidor(pagoId);
     setPagoView(null);
   };
 
@@ -3342,6 +3465,7 @@ function AlumnoCuotasModal({ alumno, data, update, onClose, onEdit }) {
       ? data.alumnos
       : data.alumnos.map(a => deltaSaldoPorAlumno[a.id] ? { ...a, saldoAFavor: Math.max(0, (a.saldoAFavor || 0) + deltaSaldoPorAlumno[a.id]) } : a);
     update({ pagos: [...data.pagos, ...newPagos], alumnos: alumnosActualizados });
+    guardarPagosNuevos(newPagos);
   };
 
   const closePaymentModal = () => {
@@ -4352,7 +4476,7 @@ function ParticularForm({ particular, profesoresExistentes, onSave, onClose }) {
 // ============================================================
 // CAJA TAB
 // ============================================================
-function CajaTab({ data, update }) {
+function CajaTab({ data, update, guardarConteoNuevo }) {
   const [fechaSel, setFechaSel] = useState(today());
   const [cargandoConteo, setCargandoConteo] = useState(false);
   const [montoConteo, setMontoConteo] = useState('');
@@ -4377,6 +4501,7 @@ function CajaTab({ data, update }) {
     if (!monto || monto <= 0) return;
     const nuevoConteo = { id: uid(), fecha: today(), hora: horaActual(), monto };
     update({ cajaConteos: [...(data.cajaConteos || []), nuevoConteo] });
+    guardarConteoNuevo(nuevoConteo);
     setMontoConteo('');
     setCargandoConteo(false);
   };
