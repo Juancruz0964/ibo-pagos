@@ -4724,6 +4724,7 @@ function Inscripcion2027Tab({ data, update, guardarInscripcionNueva, borrarInscr
   const [mensajeEditadoManualmente, setMensajeEditadoManualmente] = useState(false);
   const [guardada, setGuardada] = useState(null);
   const [viendoCuotasAlumno, setViendoCuotasAlumno] = useState(null);
+  const [pagandoMatricula, setPagandoMatricula] = useState(null); // { alumno, selectedPeriodos }
   const [agrupadoPor, setAgrupadoPor] = useState('alumno'); // 'alumno' | 'curso' — para el listado
 
   const yaInscriptosIds = useMemo(() => new Set(data.inscripciones2027.map(i => i.alumnoId)), [data.inscripciones2027]);
@@ -4820,6 +4821,44 @@ function Inscripcion2027Tab({ data, update, guardarInscripcionNueva, borrarInscr
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(mensaje)}`, '_blank');
   };
 
+  // Abre el cobro de matrícula ya enfocado en lo que falta: si ya hay un
+  // pago parcial, cobra puntualmente el saldo restante (no el precio de
+  // lista completo de nuevo); si no pagó nada, cobra el precio vigente.
+  const cobrarMatricula = (alumno) => {
+    const estado = obtenerEstadoCuota(data.pagos, alumno.id, 'INSC', ANIO_INSCRIPCION_NUEVA);
+    setPagandoMatricula({
+      alumno,
+      selectedPeriodos: estado.estado === 'parcial'
+        ? [{ alumnoId: alumno.id, periodoId: 'INSC', anio: ANIO_INSCRIPCION_NUEVA, esSaldo: true, montoSaldo: estado.saldo }]
+        : [{ alumnoId: alumno.id, periodoId: 'INSC', anio: ANIO_INSCRIPCION_NUEVA }]
+    });
+  };
+
+  const onConfirmPagoMatricula = (paymentDetails) => {
+    const alumno = pagandoMatricula.alumno;
+    const detalle = paymentDetails.perAlumno[alumno.id]?.['INSC'];
+    const nuevoPago = {
+      id: uid(),
+      alumnoId: alumno.id,
+      periodoId: 'INSC',
+      anio: ANIO_INSCRIPCION_NUEVA,
+      fechaPago: paymentDetails.fechaPago || today(),
+      horaPago: paymentDetails.horaPago || horaActual(),
+      montoCobrado: detalle?.monto || 0,
+      precioFijado: detalle?.precioFijado || detalle?.monto || 0,
+      montoTotal: detalle?.monto || 0,
+      metodo: detalle?.metodo || 'efectivo',
+      montoEfectivo: detalle?.montoEfectivo || 0,
+      observaciones: ''
+    };
+    const delta = (detalle?.extraAFavor || 0) - (detalle?.creditoAplicado || 0);
+    const alumnosActualizados = delta !== 0
+      ? data.alumnos.map(a => a.id === alumno.id ? { ...a, saldoAFavor: Math.max(0, (a.saldoAFavor || 0) + delta) } : a)
+      : data.alumnos;
+    update({ pagos: [...data.pagos, nuevoPago], alumnos: alumnosActualizados });
+    guardarPagosNuevos([nuevoPago]);
+  };
+
   return (
     <div className="space-y-4">
       <div className="bg-white rounded-2xl border border-cream-200 p-6 space-y-4">
@@ -4900,8 +4939,11 @@ function Inscripcion2027Tab({ data, update, guardarInscripcionNueva, borrarInscr
                 </div>
 
                 {inscripcionExistente && (
-                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
-                    Ya tiene una inscripción {ANIO_INSCRIPCION_NUEVA} registrada ({cursosActivos.find(c => c.id === inscripcionExistente.cursoDestinoId)?.nombre || '—'}, el {fmtFechaCorta(inscripcionExistente.fecha)}). Para cambiarla, borrala desde "Inscriptos {ANIO_INSCRIPCION_NUEVA}" y volvé a cargarla.
+                  <div className="space-y-3">
+                    <div className="bg-cream-50 border border-cream-200 rounded-xl p-4 text-sm text-cream-700">
+                      Ya tiene una inscripción {ANIO_INSCRIPCION_NUEVA} registrada ({cursosActivos.find(c => c.id === inscripcionExistente.cursoDestinoId)?.nombre || '—'}, el {fmtFechaCorta(inscripcionExistente.fecha)}). Para cambiar el curso elegido, borrala desde "Inscriptos {ANIO_INSCRIPCION_NUEVA}" y volvé a cargarla.
+                    </div>
+                    <ResumenMatricula alumno={alumnoSeleccionado} data={data} onCobrar={() => cobrarMatricula(alumnoSeleccionado)} />
                   </div>
                 )}
 
@@ -4921,21 +4963,21 @@ function Inscripcion2027Tab({ data, update, guardarInscripcionNueva, borrarInscr
                 )}
 
                 {guardada ? (
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-3">
-                    <div className="flex items-center gap-2 text-emerald-800 text-sm">
-                      <Check size={16} /> Inscripción guardada.
+                  <div className="space-y-3">
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-3">
+                      <div className="flex items-center gap-2 text-emerald-800 text-sm">
+                        <Check size={16} /> Inscripción guardada.
+                      </div>
+                      <div className="flex gap-2 flex-wrap">
+                        <button onClick={() => enviarWhatsApp(guardada.alumno)} className="bg-[#25D366] hover:brightness-95 text-white text-sm font-medium px-3 py-2 rounded-lg flex items-center gap-2">
+                          <MessageCircle size={14} /> Enviar WhatsApp
+                        </button>
+                        <button onClick={cancelar} className="text-sm font-medium text-cream-500 hover:text-cream-800 px-3 py-2 rounded-lg">
+                          Nueva inscripción
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex gap-2 flex-wrap">
-                      <button onClick={() => enviarWhatsApp(guardada.alumno)} className="bg-[#25D366] hover:brightness-95 text-white text-sm font-medium px-3 py-2 rounded-lg flex items-center gap-2">
-                        <MessageCircle size={14} /> Enviar WhatsApp
-                      </button>
-                      <button onClick={() => setViendoCuotasAlumno(guardada.alumno)} className="text-sm font-medium text-cream-700 border border-cream-200 hover:bg-cream-50 px-3 py-2 rounded-lg">
-                        Cobrar matrícula {ANIO_INSCRIPCION_NUEVA}
-                      </button>
-                      <button onClick={cancelar} className="text-sm font-medium text-cream-500 hover:text-cream-800 px-3 py-2 rounded-lg">
-                        Nueva inscripción
-                      </button>
-                    </div>
+                    <ResumenMatricula alumno={guardada.alumno} data={data} onCobrar={() => cobrarMatricula(guardada.alumno)} />
                   </div>
                 ) : !inscripcionExistente && (
                   <>
@@ -4998,6 +5040,62 @@ function Inscripcion2027Tab({ data, update, guardarInscripcionNueva, borrarInscr
           onClose={() => setViendoCuotasAlumno(null)}
         />
       )}
+
+      {pagandoMatricula && (
+        <PaymentModal
+          data={data}
+          update={update}
+          selectedPeriodos={pagandoMatricula.selectedPeriodos}
+          onClose={() => setPagandoMatricula(null)}
+          onConfirm={onConfirmPagoMatricula}
+        />
+      )}
+    </div>
+  );
+}
+
+// Resumen compacto de la matrícula del año nuevo para un alumno: lo
+// abonado, lo que falta, y un botón para cobrar directo (reutiliza el
+// mismo PaymentModal de siempre, no un cobro aparte). Si todavía no pagó
+// nada, el "restante" es el valor vigente ahora mismo -- que puede
+// cambiar si se actualiza la matrícula en Configuración antes de
+// cobrarla; una vez que hay un primer pago, el restante queda fijo a
+// ese valor (mismo criterio que ya usan las cuotas mensuales).
+function ResumenMatricula({ alumno, data, onCobrar }) {
+  const estado = obtenerEstadoCuota(data.pagos, alumno.id, 'INSC', ANIO_INSCRIPCION_NUEVA);
+  if (estado.estado === 'pagado') {
+    return (
+      <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-sm text-emerald-800 flex items-center gap-2">
+        <Check size={16} /> Matrícula {ANIO_INSCRIPCION_NUEVA} pagada ({fmtMoney(estado.cobrado)}).
+      </div>
+    );
+  }
+  const calc = calcularCuota(alumno, 'INSC', ANIO_INSCRIPCION_NUEVA, data);
+  const precioActual = calc && !calc.error ? calc.efectivo : 0;
+  const abonado = estado.cobrado || 0;
+  const restante = abonado > 0 ? estado.saldo : precioActual;
+  return (
+    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
+      <div className="text-sm font-semibold text-amber-900">Matrícula {ANIO_INSCRIPCION_NUEVA} de {fullName(alumno)}</div>
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-amber-700">Abonado</span>
+        <span className="font-semibold text-amber-900">{fmtMoney(abonado)}</span>
+      </div>
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-amber-700">Restante</span>
+        <span className="font-semibold text-amber-900">{fmtMoney(restante)}</span>
+      </div>
+      <p className="text-xs text-amber-600 italic">
+        {abonado > 0
+          ? 'El restante queda fijo al valor de la matrícula del primer pago, no cambia aunque se actualice el precio después.'
+          : `Valor actual: ${fmtMoney(precioActual)}. Sujeto a cambios si se actualiza la matrícula en Configuración antes de cobrarla.`}
+      </p>
+      <button
+        onClick={onCobrar}
+        className="w-full bg-gradient-to-b from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 shadow-md shadow-brand-600/25 text-white px-4 py-2.5 rounded-lg font-medium text-sm flex items-center justify-center gap-2"
+      >
+        <DollarSign size={16} /> {abonado > 0 ? 'Cobrar resto de la matrícula' : 'Cobrar matrícula'}
+      </button>
     </div>
   );
 }
