@@ -4795,9 +4795,19 @@ function Inscripcion2027Tab({ data, update, guardarInscripcionNueva, borrarInscr
     setGuardada(null);
   };
 
+  // Mismo chequeo que ya tiene el alta de alumnos en Alumnos: si el DNI
+  // que se está tipeando coincide con uno que ya existe (activo o dado de
+  // baja), avisar y ofrecer usar ese en vez de crear un duplicado.
+  const dniCoincidente = useMemo(() => {
+    if (!cargandoNuevo) return null;
+    const dni = (nuevoForm.dni || '').trim();
+    if (dni.length < 6) return null;
+    return data.alumnos.find(a => (a.dni || '').trim() === dni) || null;
+  }, [cargandoNuevo, nuevoForm.dni, data.alumnos]);
+
   const puedeGuardar = !!cursoDestinoId && (
     cargandoNuevo
-      ? nuevoForm.nombre.trim() && nuevoForm.apellido.trim() && nuevoForm.dni.trim()
+      ? nuevoForm.nombre.trim() && nuevoForm.apellido.trim() && nuevoForm.dni.trim() && !dniCoincidente
       : !!alumnoSeleccionado
   );
 
@@ -4962,11 +4972,31 @@ function Inscripcion2027Tab({ data, update, guardarInscripcionNueva, borrarInscr
                 )}
 
                 {cargandoNuevo && (
-                  <div className="grid grid-cols-2 gap-3">
-                    <Field label="Apellido" value={nuevoForm.apellido} onChange={v => setNuevoForm({ ...nuevoForm, apellido: v })} />
-                    <Field label="Nombre" value={nuevoForm.nombre} onChange={v => setNuevoForm({ ...nuevoForm, nombre: v })} />
-                    <Field label="DNI" value={nuevoForm.dni} onChange={v => setNuevoForm({ ...nuevoForm, dni: v })} />
-                    <Field label="Celular" value={nuevoForm.celular} onChange={v => setNuevoForm({ ...nuevoForm, celular: v })} hint="Sin 0 ni 15" />
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label="Apellido" value={nuevoForm.apellido} onChange={v => setNuevoForm({ ...nuevoForm, apellido: v })} />
+                      <Field label="Nombre" value={nuevoForm.nombre} onChange={v => setNuevoForm({ ...nuevoForm, nombre: v })} />
+                      <Field label="DNI" value={nuevoForm.dni} onChange={v => setNuevoForm({ ...nuevoForm, dni: v })} />
+                      <Field label="Celular" value={nuevoForm.celular} onChange={v => setNuevoForm({ ...nuevoForm, celular: v })} hint="Sin 0 ni 15" />
+                    </div>
+                    {dniCoincidente && (
+                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3">
+                        <Avatar alumno={dniCoincidente} size="sm" />
+                        <div className="flex-1 min-w-0 text-sm">
+                          <div className="font-medium text-amber-900">
+                            Ya existe un alumno con este DNI: {fullName(dniCoincidente)}
+                            {!dniCoincidente.activo && <span className="ml-1.5 text-xs px-1.5 py-0.5 bg-amber-200 text-amber-800 rounded">Dado de baja</span>}
+                          </div>
+                          <p className="text-xs text-amber-700 mt-0.5">No se puede guardar como alumno nuevo con un DNI repetido. Usá sus datos en vez de duplicarlo.</p>
+                        </div>
+                        <button
+                          onClick={() => elegirAlumno(dniCoincidente)}
+                          className="shrink-0 text-sm bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg font-medium whitespace-nowrap"
+                        >
+                          Usar estos datos
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
 
