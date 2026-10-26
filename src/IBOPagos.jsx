@@ -2064,12 +2064,12 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
     if (items.length === 1 && items[0].periodo.id === 'INSC' && items[0].anio === ANIO_INSCRIPCION_NUEVA) {
       const it = items[0];
       if (it.modalidad === 'parcial') {
-        return `Hola ${nombreContacto}! Te confirmamos que se abonó ${fmtMoney(it.monto)} de la inscripción ${ANIO_INSCRIPCION_NUEVA} de ${alumno.nombre} en ${inst}. Queda un saldo pendiente de ${fmtMoney(it.saldoRestante)} para completarla. ¡Muchas gracias!`;
+        return `Hola ${nombreContacto}! Te confirmamos que se abonó ${fmtMoney(it.monto)} de la inscripción ${ANIO_INSCRIPCION_NUEVA} de ${fullName(alumno)} en ${inst}. Queda un saldo pendiente de ${fmtMoney(it.saldoRestante)} para completarla (este saldo puede modificarse si llega a actualizarse el valor de la matrícula antes de abonarlo). ¡Muchas gracias!`;
       }
       if (it.modalidad === 'saldo') {
-        return `Hola ${nombreContacto}! Te confirmamos que se terminó de abonar la inscripción ${ANIO_INSCRIPCION_NUEVA} de ${alumno.nombre} en ${inst} con el pago de ${fmtMoney(it.monto)}. ¡Inscripción ${ANIO_INSCRIPCION_NUEVA} completa, muchas gracias!`;
+        return `Hola ${nombreContacto}! Te confirmamos que se terminó de abonar la inscripción ${ANIO_INSCRIPCION_NUEVA} de ${fullName(alumno)} en ${inst} con el pago de ${fmtMoney(it.monto)}. ¡Inscripción ${ANIO_INSCRIPCION_NUEVA} completa, muchas gracias!`;
       }
-      return `Hola ${nombreContacto}! Te confirmamos que se abonó la inscripción ${ANIO_INSCRIPCION_NUEVA} de ${alumno.nombre} en ${inst}, en su totalidad: ${fmtMoney(it.monto)}. ¡Muchas gracias, los esperamos el año que viene!`;
+      return `Hola ${nombreContacto}! Te confirmamos que se abonó la inscripción ${ANIO_INSCRIPCION_NUEVA} de ${fullName(alumno)} en ${inst}, en su totalidad: ${fmtMoney(it.monto)}. ¡Muchas gracias, los esperamos el año que viene!`;
     }
 
     const totalesItems = items.filter(it => it.modalidad === 'total');
