@@ -110,6 +110,27 @@ function doPost(e) {
       });
     }
 
+    if (body.action === 'agregarInscripcion2027') {
+      return conCandado(function() {
+        var data = loadData(ss) || {};
+        var yaExiste = (data.inscripciones2027 || []).some(function(i) { return i.id === body.inscripcion.id; });
+        if (!yaExiste) {
+          data.inscripciones2027 = (data.inscripciones2027 || []).concat([body.inscripcion]);
+          saveData(ss, data, true);
+        }
+        return jsonResponse({ ok: true });
+      });
+    }
+
+    if (body.action === 'eliminarInscripcion2027') {
+      return conCandado(function() {
+        var data = loadData(ss) || {};
+        data.inscripciones2027 = (data.inscripciones2027 || []).filter(function(i) { return i.id !== body.inscripcionId; });
+        saveData(ss, data, true);
+        return jsonResponse({ ok: true });
+      });
+    }
+
     return jsonResponse({ ok: false, error: 'Acción desconocida' });
   } catch (err) {
     return jsonResponse({ ok: false, error: err.toString() });
@@ -161,20 +182,22 @@ function loadData(ss) {
   return result;
 }
 
-var TODAS_LAS_CLAVES = ['cursos', 'configuracion', 'gruposFamiliares', 'promociones', 'alumnosParticulares', 'cajaConteos', 'pagos', 'alumnos', 'preciosCuotas'];
+var TODAS_LAS_CLAVES = ['cursos', 'configuracion', 'gruposFamiliares', 'promociones', 'alumnosParticulares', 'cajaConteos', 'inscripciones2027', 'pagos', 'alumnos', 'preciosCuotas'];
+var CLAVES_ADITIVAS_GAS = { pagos: true, cajaConteos: true, inscripciones2027: true };
 
 function saveData(ss, data, permitirPagosYCaja) {
   var sheet = ss.getSheetByName(SHEET_NAME);
   if (!sheet) sheet = ss.insertSheet(SHEET_NAME);
 
-  // pagos y cajaConteos solo se escriben cuando quien llama es una de las
-  // acciones aditivas (permitirPagosYCaja=true), que arman "data" leyendo
-  // lo que ya hay y sumando lo puntual. El guardado general (false) los
-  // ignora SIEMPRE, sin importar qué traiga "data" en esos dos campos --
-  // así, aunque quede una pestaña con una versión vieja de la app todavía
-  // mandando pagos como parte del guardado general, no puede tocarlos.
+  // pagos, cajaConteos e inscripciones2027 solo se escriben cuando quien
+  // llama es una de las acciones aditivas (permitirPagosYCaja=true), que
+  // arman "data" leyendo lo que ya hay y sumando lo puntual. El guardado
+  // general (false) los ignora SIEMPRE, sin importar qué traiga "data" en
+  // esos campos -- así, aunque quede una pestaña con una versión vieja de
+  // la app todavía mandando pagos como parte del guardado general, no
+  // puede tocarlos.
   var necesitaCompletar = TODAS_LAS_CLAVES.some(function(k) {
-    if ((k === 'pagos' || k === 'cajaConteos') && !permitirPagosYCaja) return true;
+    if (CLAVES_ADITIVAS_GAS[k] && !permitirPagosYCaja) return true;
     return data[k] === undefined;
   });
   var completo = data;
@@ -182,7 +205,7 @@ function saveData(ss, data, permitirPagosYCaja) {
     var actual = loadData(ss) || {};
     completo = {};
     TODAS_LAS_CLAVES.forEach(function(k) {
-      var esAditiva = (k === 'pagos' || k === 'cajaConteos');
+      var esAditiva = CLAVES_ADITIVAS_GAS[k];
       if (esAditiva && !permitirPagosYCaja) {
         completo[k] = actual[k];
       } else {
@@ -192,7 +215,7 @@ function saveData(ss, data, permitirPagosYCaja) {
   }
 
   var rows = [];
-  var simpleKeys = ['cursos', 'configuracion', 'gruposFamiliares', 'promociones', 'alumnosParticulares', 'cajaConteos'];
+  var simpleKeys = ['cursos', 'configuracion', 'gruposFamiliares', 'promociones', 'alumnosParticulares', 'cajaConteos', 'inscripciones2027'];
 
   simpleKeys.forEach(function(key) {
     if (completo[key] !== undefined) {

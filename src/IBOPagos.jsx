@@ -46,7 +46,7 @@ const omitir = (obj, claves) => {
   claves.forEach(k => delete copia[k]);
   return copia;
 };
-const CLAVES_ADITIVAS = ['pagos', 'cajaConteos'];
+const CLAVES_ADITIVAS = ['pagos', 'cajaConteos', 'inscripciones2027'];
 
 const storage = {
   async get(key) {
@@ -151,6 +151,22 @@ const storage = {
       { action: 'agregarConteoCaja', conteo },
       (servidor) => (servidor.cajaConteos || []).some(c => c.id === conteo.id)
     );
+  },
+
+  async agregarInscripcion2027(inscripcion) {
+    if (!GAS_URL) return { ok: true };
+    return storage._postYVerificar(
+      { action: 'agregarInscripcion2027', inscripcion },
+      (servidor) => (servidor.inscripciones2027 || []).some(i => i.id === inscripcion.id)
+    );
+  },
+
+  async eliminarInscripcion2027(inscripcionId) {
+    if (!GAS_URL) return { ok: true };
+    return storage._postYVerificar(
+      { action: 'eliminarInscripcion2027', inscripcionId },
+      (servidor) => !(servidor.inscripciones2027 || []).some(i => i.id === inscripcionId)
+    );
   }
 };
 
@@ -198,6 +214,7 @@ const initialState = {
   pagos: [],
   alumnosParticulares: [],
   cajaConteos: [],
+  inscripciones2027: [],
   configuracion: {
     nombreInstituto: 'IBO',
     recargoSegundaQuincenaPorcentaje: 5,
@@ -577,6 +594,37 @@ const obtenerEstadoCuota = (pagos, alumnoId, periodoId, anio) => {
   };
 };
 
+// Año sobre el que se muestra la "deuda" en el listado de Alumnos y en el
+// resumen de Ver cuotas (la funcionalidad "Deuda 2026").
+const ANIO_DEUDA_ACTUAL = 2026;
+
+// Deuda de cuotas MENSUALES de un alumno en un año: suma el saldo de las
+// cuotas parciales y el precio vigente de las pendientes. Reutiliza
+// obtenerEstadoCuota/calcularCuota (las mismas funciones que ya muestran
+// cada cuota en "Ver cuotas"), así nunca puede quedar desincronizada de lo
+// que realmente figura cobrado.
+const calcularDeudaMensual = (alumno, anio, curso, data) => {
+  const periodosAplicables = PERIODOS.filter(p =>
+    p.tipo === 'MENSUAL' &&
+    !(curso?.mesesExcluidos || []).includes(p.id) &&
+    !esCuotaAnulada(alumno, p.id, anio)
+  );
+  let total = 0;
+  const detalle = periodosAplicables.map(p => {
+    const estadoCuota = obtenerEstadoCuota(data.pagos, alumno.id, p.id, anio);
+    if (estadoCuota.estado === 'pagado') return { periodo: p, estado: 'pagado', monto: 0 };
+    if (estadoCuota.estado === 'parcial') {
+      total += estadoCuota.saldo;
+      return { periodo: p, estado: 'parcial', monto: estadoCuota.saldo };
+    }
+    const calc = calcularCuota(alumno, p.id, anio, data);
+    const monto = calc && !calc.error ? calc.efectivo : 0;
+    total += monto;
+    return { periodo: p, estado: 'pendiente', monto };
+  });
+  return { total, detalle, mesesPendientes: detalle.filter(d => d.estado !== 'pagado').length };
+};
+
 // ============================================================
 // MAIN APP
 // ============================================================
@@ -747,6 +795,8 @@ export default function App() {
   const guardarPagosNuevos = (pagos) => operacionAditiva(() => storage.agregarPagos(pagos));
   const borrarPagoDelServidor = (pagoId) => operacionAditiva(() => storage.eliminarPago(pagoId));
   const guardarConteoNuevo = (conteo) => operacionAditiva(() => storage.agregarConteoCaja(conteo));
+  const guardarInscripcionNueva = (inscripcion) => operacionAditiva(() => storage.agregarInscripcion2027(inscripcion));
+  const borrarInscripcionDelServidor = (inscripcionId) => operacionAditiva(() => storage.eliminarInscripcion2027(inscripcionId));
 
   // Al desmontar de verdad (no en cada cambio de "data"), cancelar cualquier
   // timer de guardado/reintento pendiente.
@@ -841,6 +891,7 @@ export default function App() {
             {tab === 'alumnos' && <AlumnosTab data={data} update={update} guardarPagosNuevos={guardarPagosNuevos} borrarPagoDelServidor={borrarPagoDelServidor} />}
             {tab === 'particulares' && <ParticularesTab data={data} update={update} />}
             {tab === 'caja' && <CajaTab data={data} update={update} guardarConteoNuevo={guardarConteoNuevo} />}
+            {tab === 'inscripcion2027' && <Inscripcion2027Tab data={data} update={update} guardarInscripcionNueva={guardarInscripcionNueva} borrarInscripcionDelServidor={borrarInscripcionDelServidor} guardarPagosNuevos={guardarPagosNuevos} borrarPagoDelServidor={borrarPagoDelServidor} />}
             {tab === 'cursos' && <CursosTab data={data} update={update} />}
             {tab === 'config' && <ConfigTab data={data} update={update} />}
           </div>
@@ -872,6 +923,7 @@ function Header({ tab, setTab, nombreInstituto, saveStatus }) {
     { id: 'alumnos', label: 'Alumnos', icon: Users },
     { id: 'particulares', label: 'Particulares', icon: Clock },
     { id: 'caja', label: 'Caja', icon: Wallet },
+    { id: 'inscripcion2027', label: 'Inscripción 2027', icon: UserPlus },
     { id: 'cursos', label: 'Cursos', icon: BookOpen },
     { id: 'config', label: 'Configuración', icon: Settings }
   ];
@@ -2622,8 +2674,26 @@ function AlumnosTab({ data, update, guardarPagosNuevos, borrarPagoDelServidor })
   const [filtroCurso, setFiltroCurso] = useState('todos');
   const [mostrarInactivos, setMostrarInactivos] = useState(false);
   const [soloIncompletos, setSoloIncompletos] = useState(false);
+  const [soloConDeuda2026, setSoloConDeuda2026] = useState(false);
 
   const incompletos = useMemo(() => data.alumnos.filter(a => a.activo && datosFaltantes(a).length > 0), [data.alumnos]);
+
+  // Deuda de cuotas 2026 por alumno, calculada una sola vez para toda la
+  // lista (se recalcula sola cada vez que cambian los pagos, cobrar una
+  // cuota la descuenta automáticamente del total).
+  const deudaPorAlumno = useMemo(() => {
+    const m = {};
+    data.alumnos.forEach(a => {
+      if (!a.activo || !a.cursoId) return;
+      const curso = data.cursos.find(c => c.id === a.cursoId);
+      m[a.id] = calcularDeudaMensual(a, ANIO_DEUDA_ACTUAL, curso, data);
+    });
+    return m;
+  }, [data.alumnos, data.cursos, data.pagos, data.configuracion, data.promociones]);
+  const conDeuda2026 = useMemo(
+    () => data.alumnos.filter(a => deudaPorAlumno[a.id]?.total > 0),
+    [data.alumnos, deudaPorAlumno]
+  );
   const inactivos = useMemo(() =>
     data.alumnos.filter(a => !a.activo).sort((a, b) => (a.apellido + a.nombre).localeCompare(b.apellido + b.nombre)),
     [data.alumnos]
@@ -2634,12 +2704,13 @@ function AlumnosTab({ data, update, guardarPagosNuevos, borrarPagoDelServidor })
     return data.alumnos.filter(a => {
       if (!mostrarInactivos && !a.activo) return false;
       if (soloIncompletos && incompletos.length > 0 && datosFaltantes(a).length === 0) return false;
+      if (soloConDeuda2026 && conDeuda2026.length > 0 && !(deudaPorAlumno[a.id]?.total > 0)) return false;
       if (filtroCurso === 'sin-curso' && a.cursoId) return false;
       if (filtroCurso !== 'todos' && filtroCurso !== 'sin-curso' && a.cursoId !== filtroCurso) return false;
       if (q && !(a.nombre + ' ' + a.apellido + ' ' + a.dni).toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [data.alumnos, query, filtroCurso, mostrarInactivos, soloIncompletos]);
+  }, [data.alumnos, query, filtroCurso, mostrarInactivos, soloIncompletos, soloConDeuda2026, conDeuda2026, deudaPorAlumno]);
 
   const conteoPorCurso = useMemo(() => {
     const c = {};
@@ -2741,6 +2812,11 @@ function AlumnosTab({ data, update, guardarPagosNuevos, borrarPagoDelServidor })
                   <span className="flex items-center gap-1.5"><AlertCircle size={12} /> Faltan datos · {incompletos.length}</span>
                 </FilterChip>
               )}
+              {conDeuda2026.length > 0 && (
+                <FilterChip active={soloConDeuda2026} onClick={() => setSoloConDeuda2026(!soloConDeuda2026)}>
+                  <span className="flex items-center gap-1.5">Debe {ANIO_DEUDA_ACTUAL} · {conDeuda2026.length}</span>
+                </FilterChip>
+              )}
               <label className="ml-auto text-xs text-cream-500 flex items-center gap-1.5 cursor-pointer">
                 <input type="checkbox" checked={mostrarInactivos} onChange={e => setMostrarInactivos(e.target.checked)} className="rounded" />
                 Mostrar inactivos
@@ -2770,6 +2846,11 @@ function AlumnosTab({ data, update, guardarPagosNuevos, borrarPagoDelServidor })
                           {!a.activo && <span className="text-xs px-1.5 py-0.5 bg-cream-200 text-cream-600 rounded">Inactivo</span>}
                           {grupo && <span className="text-xs px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded flex items-center gap-1"><Home size={10} />{grupo.nombre}</span>}
                           {a.saldoAFavor > 0 && <span className="text-xs px-1.5 py-0.5 bg-sky-50 text-sky-700 rounded font-medium">A favor {fmtMoney(a.saldoAFavor)}</span>}
+                          {deudaPorAlumno[a.id]?.total > 0 && (
+                            <span className="text-xs px-1.5 py-0.5 bg-red-50 text-red-700 rounded font-medium flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-red-500" /> Debe {fmtMoney(deudaPorAlumno[a.id].total)} de {ANIO_DEUDA_ACTUAL}
+                            </span>
+                          )}
                         </div>
                         <div className="text-xs text-cream-500 truncate">
                           {curso?.nombre || 'Sin curso'} · {a.horarioCurso || (a.dia ? `${a.dia} ${a.horario || ''}` : 'Sin horario')} · DNI {a.dni}
@@ -3389,9 +3470,9 @@ function AlumnoForm({ alumno, data, update, onSave, onClose }) {
 // Panel de cuotas de un alumno, accesible desde la solapa Alumnos: permite
 // ver el estado de cada cuota (con fecha y método de pago al ver el detalle)
 // y cobrar directamente, reutilizando los mismos componentes de Pagos.
-function AlumnoCuotasModal({ alumno, data, update, onClose, onEdit, guardarPagosNuevos, borrarPagoDelServidor }) {
+function AlumnoCuotasModal({ alumno, data, update, onClose, onEdit, guardarPagosNuevos, borrarPagoDelServidor, anioInicial }) {
   const curso = data.cursos.find(c => c.id === alumno.cursoId);
-  const [anio, setAnio] = useState(new Date().getFullYear());
+  const [anio, setAnio] = useState(anioInicial || new Date().getFullYear());
   const [selectedPeriodos, setSelectedPeriodos] = useState([]);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showCalcularModal, setShowCalcularModal] = useState(false);
@@ -3473,6 +3554,11 @@ function AlumnoCuotasModal({ alumno, data, update, onClose, onEdit, guardarPagos
     setSelectedPeriodos([]);
   };
 
+  // Resumen de deuda 2026, solo cuando se está mirando ese año puntual
+  // (reutiliza la misma lógica que el badge de la lista de Alumnos — se
+  // actualiza sola en cuanto se cobra alguna cuota).
+  const deuda2026 = anio === ANIO_DEUDA_ACTUAL ? calcularDeudaMensual(alumno, ANIO_DEUDA_ACTUAL, curso, data) : null;
+
   return (
     <>
       <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center p-4 overflow-y-auto">
@@ -3492,6 +3578,17 @@ function AlumnoCuotasModal({ alumno, data, update, onClose, onEdit, guardarPagos
                 {[2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
               </select>
             </div>
+            {deuda2026 && deuda2026.total > 0 && (
+              <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-red-700">Debe de {ANIO_DEUDA_ACTUAL}</div>
+                  <div className="font-display text-xl font-semibold text-red-700 mt-0.5">{fmtMoney(deuda2026.total)}</div>
+                </div>
+                <span className="text-xs text-red-700">
+                  {deuda2026.mesesPendientes} mes{deuda2026.mesesPendientes !== 1 ? 'es' : ''} pendiente{deuda2026.mesesPendientes !== 1 ? 's' : ''}
+                </span>
+              </div>
+            )}
             <AlumnoPagoCard
               alumno={alumno}
               curso={curso}
@@ -4607,6 +4704,396 @@ function CajaTab({ data, update, guardarConteoNuevo }) {
       <div className="text-xs text-cream-500 italic px-1">
         Esta pantalla solo suma lo que ya cobraste — no cambia ningún dato de alumnos, cuotas ni pagos.
       </div>
+    </div>
+  );
+}
+
+// ============================================================
+// INSCRIPCIÓN 2027 TAB
+// ============================================================
+const ANIO_INSCRIPCION_NUEVA = 2027;
+
+function Inscripcion2027Tab({ data, update, guardarInscripcionNueva, borrarInscripcionDelServidor, guardarPagosNuevos, borrarPagoDelServidor }) {
+  const [subTab, setSubTab] = useState('nueva'); // 'nueva' | 'listado'
+  const [query, setQuery] = useState('');
+  const [alumnoSeleccionadoId, setAlumnoSeleccionadoId] = useState(null);
+  const [cargandoNuevo, setCargandoNuevo] = useState(false);
+  const [nuevoForm, setNuevoForm] = useState({ nombre: '', apellido: '', dni: '', celular: '' });
+  const [cursoDestinoId, setCursoDestinoId] = useState('');
+  const [mensaje, setMensaje] = useState('');
+  const [mensajeEditadoManualmente, setMensajeEditadoManualmente] = useState(false);
+  const [guardada, setGuardada] = useState(null);
+  const [viendoCuotasAlumno, setViendoCuotasAlumno] = useState(null);
+  const [agrupadoPor, setAgrupadoPor] = useState('alumno'); // 'alumno' | 'curso' — para el listado
+
+  const yaInscriptosIds = useMemo(() => new Set(data.inscripciones2027.map(i => i.alumnoId)), [data.inscripciones2027]);
+  const cursosActivos = data.cursos.filter(c => c.activo);
+
+  const resultados = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (q.length < 2) return [];
+    return data.alumnos.filter(a =>
+      (a.dni || '').includes(q) || (a.apellido + ' ' + a.nombre).toLowerCase().includes(q)
+    ).slice(0, 8);
+  }, [data.alumnos, query]);
+
+  const alumnoSeleccionado = alumnoSeleccionadoId ? data.alumnos.find(a => a.id === alumnoSeleccionadoId) : null;
+  const cursoOrigen = alumnoSeleccionado ? data.cursos.find(c => c.id === alumnoSeleccionado.cursoId) : null;
+  const inscripcionExistente = alumnoSeleccionado ? data.inscripciones2027.find(i => i.alumnoId === alumnoSeleccionado.id) : null;
+
+  // Mensaje de WhatsApp preestablecido: se recalcula solo mientras no se
+  // haya tocado a mano, para no pisar una edición manual del texto.
+  useEffect(() => {
+    if (mensajeEditadoManualmente) return;
+    const nombre = cargandoNuevo ? nuevoForm.nombre : (alumnoSeleccionado?.nombre || '');
+    const cursoNombre = cursosActivos.find(c => c.id === cursoDestinoId)?.nombre || '';
+    if (!nombre || !cursoNombre) { setMensaje(''); return; }
+    setMensaje(`Hola! Confirmamos la inscripción ${ANIO_INSCRIPCION_NUEVA} de ${nombre} en ${data.configuracion.nombreInstituto} (${cursoNombre}). ¡Nos vemos pronto!`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [alumnoSeleccionado, cargandoNuevo, nuevoForm.nombre, cursoDestinoId, mensajeEditadoManualmente]);
+
+  const elegirAlumno = (a) => {
+    setAlumnoSeleccionadoId(a.id);
+    setCargandoNuevo(false);
+    setCursoDestinoId(a.cursoId || '');
+    setMensajeEditadoManualmente(false);
+    setGuardada(null);
+  };
+
+  const elegirNuevo = () => {
+    setAlumnoSeleccionadoId(null);
+    setCargandoNuevo(true);
+    setNuevoForm({ nombre: '', apellido: query, dni: '', celular: '' });
+    setCursoDestinoId('');
+    setMensajeEditadoManualmente(false);
+    setGuardada(null);
+  };
+
+  const cancelar = () => {
+    setAlumnoSeleccionadoId(null);
+    setCargandoNuevo(false);
+    setQuery('');
+    setNuevoForm({ nombre: '', apellido: '', dni: '', celular: '' });
+    setCursoDestinoId('');
+    setMensaje('');
+    setMensajeEditadoManualmente(false);
+    setGuardada(null);
+  };
+
+  const puedeGuardar = !!cursoDestinoId && (
+    cargandoNuevo
+      ? nuevoForm.nombre.trim() && nuevoForm.apellido.trim() && nuevoForm.dni.trim()
+      : !!alumnoSeleccionado
+  );
+
+  const guardarInscripcion = () => {
+    if (!puedeGuardar) return;
+    let alumno = alumnoSeleccionado;
+    if (cargandoNuevo) {
+      alumno = {
+        nombre: nuevoForm.nombre.trim(), apellido: nuevoForm.apellido.trim(), dni: nuevoForm.dni.trim(), celular: nuevoForm.celular.trim(),
+        celularAlternativo: '', contactoNombre: '', fechaNacimiento: '',
+        id: uid(), cursoId: cursoDestinoId, horarioCurso: '', grupoFamiliarId: null, activo: true, observaciones: '',
+        creadoEn: today(), creadoHora: horaActual()
+      };
+      update({ alumnos: [...data.alumnos, alumno] });
+    }
+    const nuevaInscripcion = {
+      id: uid(),
+      alumnoId: alumno.id,
+      cursoOrigenId: cargandoNuevo ? null : (alumno.cursoId || null),
+      cursoDestinoId,
+      fecha: today()
+    };
+    update({ inscripciones2027: [...data.inscripciones2027, nuevaInscripcion] });
+    guardarInscripcionNueva(nuevaInscripcion);
+    setGuardada({ inscripcion: nuevaInscripcion, alumno });
+  };
+
+  const enviarWhatsApp = (alumno) => {
+    const phone = formatPhoneForWA(alumno.celular);
+    if (!phone) {
+      navigator.clipboard?.writeText(mensaje);
+      alert(`${alumno.nombre} no tiene celular cargado. Copié el mensaje al portapapeles para enviarlo manualmente:\n\n${mensaje}`);
+      return;
+    }
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(mensaje)}`, '_blank');
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white rounded-2xl border border-cream-200 p-6 space-y-4">
+        <div className="flex gap-1 border-b border-cream-200 -mx-6 px-6 -mt-6 pt-4 mb-0">
+          {[
+            { id: 'nueva', label: 'Nueva inscripción' },
+            { id: 'listado', label: `Inscriptos ${ANIO_INSCRIPCION_NUEVA}${data.inscripciones2027.length > 0 ? ' · ' + data.inscripciones2027.length : ''}` }
+          ].map(t => (
+            <button
+              key={t.id}
+              onClick={() => setSubTab(t.id)}
+              className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-all ${
+                subTab === t.id ? 'border-brand-600 text-brand-600' : 'border-transparent text-cream-500 hover:text-cream-800'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {subTab === 'nueva' && (
+          <div className="pt-2 space-y-4 max-w-xl">
+            <p className="text-xs text-cream-500">
+              Esto no afecta nada de {ANIO_DEUDA_ACTUAL}: cuotas, precios y el curso actual del alumno siguen exactamente igual hasta que arranque {ANIO_INSCRIPCION_NUEVA}.
+            </p>
+
+            {!alumnoSeleccionado && !cargandoNuevo && (
+              <div className="space-y-2">
+                <label className="text-xs text-cream-500 font-medium uppercase tracking-wider">Buscar por DNI o apellido</label>
+                <div className="relative">
+                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-cream-400" />
+                  <input
+                    type="text"
+                    value={query}
+                    onChange={e => setQuery(e.target.value)}
+                    placeholder="DNI o apellido..."
+                    className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-cream-200 bg-white text-sm"
+                  />
+                </div>
+                {query.trim().length >= 2 && (
+                  <div className="space-y-1.5">
+                    {resultados.length === 0 && (
+                      <p className="text-xs text-cream-400 px-1">No encontramos a nadie con ese dato.</p>
+                    )}
+                    {resultados.map(a => {
+                      const curso = data.cursos.find(c => c.id === a.cursoId);
+                      const yaInscripto = yaInscriptosIds.has(a.id);
+                      return (
+                        <button
+                          key={a.id}
+                          onClick={() => elegirAlumno(a)}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border border-cream-200 hover:border-brand-400 hover:bg-cream-50 text-left"
+                        >
+                          <Avatar alumno={a} size="sm" />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-semibold text-cream-900">{fullName(a)}</div>
+                            <div className="text-xs text-cream-500">DNI {a.dni || '—'} · {curso?.nombre || 'Sin curso'}{!a.activo ? ' · Inactivo' : ''}</div>
+                          </div>
+                          {yaInscripto && <span className="text-xs px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded shrink-0">Ya inscripto {ANIO_INSCRIPCION_NUEVA}</span>}
+                        </button>
+                      );
+                    })}
+                    <button onClick={elegirNuevo} className="text-xs font-medium text-cream-500 hover:text-cream-800 border border-dashed border-cream-300 rounded-lg px-3 py-2 w-full text-left">
+                      Ninguno de estos — cargar como alumno nuevo
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {(alumnoSeleccionado || cargandoNuevo) && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between bg-cream-50 rounded-xl px-4 py-3">
+                  <span className="text-sm font-medium text-cream-900">
+                    {cargandoNuevo ? 'Alumno nuevo' : fullName(alumnoSeleccionado)}
+                  </span>
+                  <button onClick={cancelar} className="text-xs text-cream-500 hover:text-cream-800">Cambiar</button>
+                </div>
+
+                {inscripcionExistente && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
+                    Ya tiene una inscripción {ANIO_INSCRIPCION_NUEVA} registrada ({cursosActivos.find(c => c.id === inscripcionExistente.cursoDestinoId)?.nombre || '—'}, el {fmtFechaCorta(inscripcionExistente.fecha)}). Para cambiarla, borrala desde "Inscriptos {ANIO_INSCRIPCION_NUEVA}" y volvé a cargarla.
+                  </div>
+                )}
+
+                {cargandoNuevo && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Apellido" value={nuevoForm.apellido} onChange={v => setNuevoForm({ ...nuevoForm, apellido: v })} />
+                    <Field label="Nombre" value={nuevoForm.nombre} onChange={v => setNuevoForm({ ...nuevoForm, nombre: v })} />
+                    <Field label="DNI" value={nuevoForm.dni} onChange={v => setNuevoForm({ ...nuevoForm, dni: v })} />
+                    <Field label="Celular" value={nuevoForm.celular} onChange={v => setNuevoForm({ ...nuevoForm, celular: v })} hint="Sin 0 ni 15" />
+                  </div>
+                )}
+
+                {!cargandoNuevo && alumnoSeleccionado && (
+                  <div className="text-xs text-cream-500">
+                    Curso {ANIO_DEUDA_ACTUAL} actual: <span className="font-medium text-cream-800">{cursoOrigen?.nombre || 'Sin curso'}</span>
+                  </div>
+                )}
+
+                {guardada ? (
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-3">
+                    <div className="flex items-center gap-2 text-emerald-800 text-sm">
+                      <Check size={16} /> Inscripción guardada.
+                    </div>
+                    <div className="flex gap-2 flex-wrap">
+                      <button onClick={() => enviarWhatsApp(guardada.alumno)} className="bg-[#25D366] hover:brightness-95 text-white text-sm font-medium px-3 py-2 rounded-lg flex items-center gap-2">
+                        <MessageCircle size={14} /> Enviar WhatsApp
+                      </button>
+                      <button onClick={() => setViendoCuotasAlumno(guardada.alumno)} className="text-sm font-medium text-cream-700 border border-cream-200 hover:bg-cream-50 px-3 py-2 rounded-lg">
+                        Cobrar matrícula {ANIO_INSCRIPCION_NUEVA}
+                      </button>
+                      <button onClick={cancelar} className="text-sm font-medium text-cream-500 hover:text-cream-800 px-3 py-2 rounded-lg">
+                        Nueva inscripción
+                      </button>
+                    </div>
+                  </div>
+                ) : !inscripcionExistente && (
+                  <>
+                    <div>
+                      <label className="text-xs text-cream-500 font-medium uppercase tracking-wider">Curso para {ANIO_INSCRIPCION_NUEVA}</label>
+                      <select
+                        value={cursoDestinoId}
+                        onChange={e => setCursoDestinoId(e.target.value)}
+                        className="w-full mt-1 px-3 py-2 rounded-lg border border-cream-200 bg-white text-sm"
+                      >
+                        <option value="">— Elegir curso —</option>
+                        {cursosActivos.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-xs text-cream-500 font-medium uppercase tracking-wider">Mensaje de WhatsApp</label>
+                      <textarea
+                        rows={3}
+                        value={mensaje}
+                        onChange={e => { setMensaje(e.target.value); setMensajeEditadoManualmente(true); }}
+                        className="w-full mt-1 px-3 py-2.5 rounded-lg border border-cream-200 bg-white text-sm resize-none"
+                      />
+                    </div>
+
+                    <button
+                      onClick={guardarInscripcion}
+                      disabled={!puedeGuardar}
+                      className="w-full bg-gradient-to-b from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 shadow-md shadow-brand-600/25 text-white px-4 py-3 rounded-xl font-medium disabled:opacity-50"
+                    >
+                      Guardar inscripción
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {subTab === 'listado' && (
+        <Inscriptos2027Listado
+          data={data}
+          update={update}
+          borrarInscripcionDelServidor={borrarInscripcionDelServidor}
+          agrupadoPor={agrupadoPor}
+          setAgrupadoPor={setAgrupadoPor}
+          onVerCuotas={setViendoCuotasAlumno}
+        />
+      )}
+
+      {viendoCuotasAlumno && (
+        <AlumnoCuotasModal
+          alumno={viendoCuotasAlumno}
+          data={data}
+          update={update}
+          guardarPagosNuevos={guardarPagosNuevos}
+          borrarPagoDelServidor={borrarPagoDelServidor}
+          anioInicial={ANIO_INSCRIPCION_NUEVA}
+          onClose={() => setViendoCuotasAlumno(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// Listado de inscripciones ya registradas, agrupable por alumno o por el
+// curso elegido para el año nuevo (para ir viendo cómo se va armando cada
+// grupo). El estado de la matrícula se deriva de los pagos reales (INSC del
+// año nuevo) en vez de guardarse aparte, para que nunca pueda desincronizarse.
+function Inscriptos2027Listado({ data, update, borrarInscripcionDelServidor, agrupadoPor, setAgrupadoPor, onVerCuotas }) {
+  const filas = useMemo(() => {
+    return data.inscripciones2027
+      .map(i => {
+        const alumno = data.alumnos.find(a => a.id === i.alumnoId);
+        if (!alumno) return null;
+        const cursoOrigen = i.cursoOrigenId ? data.cursos.find(c => c.id === i.cursoOrigenId) : null;
+        const cursoDestino = data.cursos.find(c => c.id === i.cursoDestinoId);
+        const matriculaPagada = obtenerEstadoCuota(data.pagos, alumno.id, 'INSC', ANIO_INSCRIPCION_NUEVA).estado === 'pagado';
+        return { inscripcion: i, alumno, cursoOrigen, cursoDestino, matriculaPagada };
+      })
+      .filter(Boolean);
+  }, [data.inscripciones2027, data.alumnos, data.cursos, data.pagos]);
+
+  const eliminar = (i) => {
+    if (!confirm(`¿Eliminar la inscripción ${ANIO_INSCRIPCION_NUEVA} de este alumno?`)) return;
+    update({ inscripciones2027: data.inscripciones2027.filter(x => x.id !== i.id) });
+    borrarInscripcionDelServidor(i.id);
+  };
+
+  const grupos = useMemo(() => {
+    if (agrupadoPor === 'alumno') {
+      return [{ titulo: null, filas: [...filas].sort((a, b) => fullName(a.alumno).localeCompare(fullName(b.alumno))) }];
+    }
+    const porCurso = {};
+    filas.forEach(f => {
+      const key = f.cursoDestino?.nombre || 'Sin curso';
+      if (!porCurso[key]) porCurso[key] = [];
+      porCurso[key].push(f);
+    });
+    return Object.keys(porCurso).sort().map(k => ({ titulo: k, filas: porCurso[k] }));
+  }, [filas, agrupadoPor]);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-cream-500">Organizar por:</span>
+        <div className="flex bg-white border border-cream-200 rounded-lg p-0.5 gap-0.5">
+          {[{ id: 'alumno', label: 'Alumno' }, { id: 'curso', label: `Curso ${ANIO_INSCRIPCION_NUEVA}` }].map(o => (
+            <button
+              key={o.id}
+              onClick={() => setAgrupadoPor(o.id)}
+              className={`text-xs font-medium px-3 py-1.5 rounded-md ${agrupadoPor === o.id ? 'bg-navy-600 text-white' : 'text-cream-600 hover:bg-cream-100'}`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {filas.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-cream-200 p-12 text-center text-cream-400 text-sm">
+          Todavía no hay inscripciones {ANIO_INSCRIPCION_NUEVA} registradas.
+        </div>
+      ) : (
+        grupos.map((g, gi) => (
+          <div key={gi} className="space-y-2">
+            {g.titulo && (
+              <div className="flex items-baseline gap-2 px-1">
+                <span className="font-display text-sm font-semibold text-cream-900">{g.titulo}</span>
+                <span className="text-xs text-cream-400">{g.filas.length} alumno{g.filas.length !== 1 ? 's' : ''}</span>
+              </div>
+            )}
+            <div className="bg-white rounded-2xl border border-cream-200 overflow-hidden divide-y divide-cream-100">
+              {g.filas.map(f => (
+                <div key={f.inscripcion.id} className="flex items-center gap-3 px-5 py-3">
+                  <Avatar alumno={f.alumno} />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-cream-900">{fullName(f.alumno)}</div>
+                    <div className="text-xs text-cream-500 truncate">
+                      {f.cursoOrigen ? `${f.cursoOrigen.nombre} → ${f.cursoDestino?.nombre || '—'}` : (f.cursoDestino?.nombre || '—')}
+                    </div>
+                  </div>
+                  <span className={`text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap ${f.matriculaPagada ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                    {f.matriculaPagada ? 'Matrícula pagada' : 'Matrícula pendiente'}
+                  </span>
+                  <button onClick={() => onVerCuotas(f.alumno)} className="text-sm text-emerald-700 hover:bg-emerald-50 px-3 py-1.5 rounded-lg whitespace-nowrap">
+                    Ver cuotas
+                  </button>
+                  <button onClick={() => eliminar(f.inscripcion)} className="p-2 text-cream-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))
+      )}
     </div>
   );
 }
