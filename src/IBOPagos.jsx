@@ -2058,6 +2058,20 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
     const medio = formatMediosStr(items, usaMixtoLocal, distrLocal);
     const nombreContacto = alumno.contactoNombre || alumno.nombre;
 
+    // Mensaje propio para la matrícula de Inscripción 2027 (no usa las
+    // plantillas configurables de las cuotas mensuales): aclara el alumno
+    // y si quedó completa o no, sin mencionar el medio de pago.
+    if (items.length === 1 && items[0].periodo.id === 'INSC' && items[0].anio === ANIO_INSCRIPCION_NUEVA) {
+      const it = items[0];
+      if (it.modalidad === 'parcial') {
+        return `Hola ${nombreContacto}! Te confirmamos que se abonó ${fmtMoney(it.monto)} de la inscripción ${ANIO_INSCRIPCION_NUEVA} de ${alumno.nombre} en ${inst}. Queda un saldo pendiente de ${fmtMoney(it.saldoRestante)} para completarla. ¡Muchas gracias!`;
+      }
+      if (it.modalidad === 'saldo') {
+        return `Hola ${nombreContacto}! Te confirmamos que se terminó de abonar la inscripción ${ANIO_INSCRIPCION_NUEVA} de ${alumno.nombre} en ${inst} con el pago de ${fmtMoney(it.monto)}. ¡Inscripción ${ANIO_INSCRIPCION_NUEVA} completa, muchas gracias!`;
+      }
+      return `Hola ${nombreContacto}! Te confirmamos que se abonó la inscripción ${ANIO_INSCRIPCION_NUEVA} de ${alumno.nombre} en ${inst}, en su totalidad: ${fmtMoney(it.monto)}. ¡Muchas gracias, los esperamos el año que viene!`;
+    }
+
     const totalesItems = items.filter(it => it.modalidad === 'total');
     const parciales = items.filter(it => it.modalidad === 'parcial');
     const saldos = items.filter(it => it.modalidad === 'saldo');
