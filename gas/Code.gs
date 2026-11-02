@@ -242,6 +242,15 @@ function saveData(ss, data, permitirPagosYCaja) {
     // No fallar el guardado si la sincronización de pestañas falla
     console.log('Error sincronizando pestañas: ' + err.toString());
   }
+
+  // Actualizar la pestaña legible de inscripciones 2027 (aparte, en su
+  // propio try/catch: si esto fallara, no tiene que tirar abajo el
+  // guardado de los datos reales).
+  try {
+    sincronizarInscriptos2027(ss, completo);
+  } catch (err) {
+    console.log('Error sincronizando Inscriptos 2027: ' + err.toString());
+  }
 }
 
 // Escribe solo las celdas que efectivamente cambiaron respecto de lo que ya
@@ -380,6 +389,76 @@ function sincronizarPestanas(ss, data) {
 
     escribirSoloCambios(hoja, filas, HEADERS_CURSO.length);
   });
+}
+
+var ANIO_INSCRIPCION_NUEVA = 2027;
+var SHEET_INSCRIPTOS_2027 = 'Inscriptos 2027';
+var HEADERS_INSCRIPTOS_2027 = ['Apellido', 'Nombre', 'DNI', 'Celular', 'Curso 2026', 'Curso 2027', 'Fecha inscripción', 'Matrícula'];
+
+// Escribe (o sobreescribe) una pestaña legible con cada inscripción 2027
+// registrada, para poder verla directo en el Sheet sin tener que abrir
+// la app. El estado de la matrícula se calcula a partir de los pagos
+// reales (igual que hace la app) en vez de guardarse aparte, para que
+// nunca pueda quedar desincronizado.
+function sincronizarInscriptos2027(ss, data) {
+  if (!data.inscripciones2027 || !data.alumnos || !data.cursos) return;
+
+  var alumnoPorId = {};
+  data.alumnos.forEach(function(a) { alumnoPorId[a.id] = a; });
+  var cursoPorId = {};
+  data.cursos.forEach(function(c) { cursoPorId[c.id] = c; });
+
+  var pagosInscPorAlumno = {};
+  (data.pagos || []).forEach(function(p) {
+    if (p.periodoId !== 'INSC' || p.anio !== ANIO_INSCRIPCION_NUEVA) return;
+    if (!pagosInscPorAlumno[p.alumnoId]) pagosInscPorAlumno[p.alumnoId] = [];
+    pagosInscPorAlumno[p.alumnoId].push(p);
+  });
+
+  function estadoMatricula(alumnoId) {
+    var lista = (pagosInscPorAlumno[alumnoId] || []).slice().sort(function(a, b) {
+      return (a.fechaPago || '').localeCompare(b.fechaPago || '');
+    });
+    if (lista.length === 0) return 'Pendiente';
+    var primero = lista[0];
+    var precioFijado = primero.precioFijado != null ? primero.precioFijado : (primero.montoCobrado || primero.montoTotal || 0);
+    var cobrado = lista.reduce(function(s, p) { return s + (p.montoCobrado != null ? p.montoCobrado : (p.montoTotal || 0)); }, 0);
+    return cobrado >= precioFijado ? 'Pagada' : 'Parcial';
+  }
+
+  var hoja = ss.getSheetByName(SHEET_INSCRIPTOS_2027);
+  if (!hoja) hoja = ss.insertSheet(SHEET_INSCRIPTOS_2027);
+
+  var lista = data.inscripciones2027
+    .map(function(i) {
+      var alumno = alumnoPorId[i.alumnoId];
+      if (!alumno) return null;
+      var cursoOrigen = i.cursoOrigenId ? cursoPorId[i.cursoOrigenId] : null;
+      var cursoDestino = cursoPorId[i.cursoDestinoId];
+      return {
+        apellido: alumno.apellido || '',
+        nombre: alumno.nombre || '',
+        dni: alumno.dni || '',
+        celular: alumno.celular || '',
+        cursoOrigen: cursoOrigen ? cursoOrigen.nombre : '',
+        cursoDestino: cursoDestino ? cursoDestino.nombre : '',
+        fecha: i.fecha || '',
+        matricula: estadoMatricula(i.alumnoId)
+      };
+    })
+    .filter(function(x) { return x; })
+    .sort(function(a, b) {
+      var na = (a.apellido + ' ' + a.nombre).toLowerCase();
+      var nb = (b.apellido + ' ' + b.nombre).toLowerCase();
+      return na < nb ? -1 : (na > nb ? 1 : 0);
+    });
+
+  var filas = [HEADERS_INSCRIPTOS_2027];
+  lista.forEach(function(x) {
+    filas.push([x.apellido, x.nombre, x.dni, x.celular, x.cursoOrigen, x.cursoDestino, x.fecha, x.matricula]);
+  });
+
+  escribirSoloCambios(hoja, filas, HEADERS_INSCRIPTOS_2027.length);
 }
 
 // Convierte 'YYYY-MM-DD' → 'DD/MM'
