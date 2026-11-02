@@ -431,6 +431,16 @@ const calcularCuota = (alumno, periodoId, anio, ctx) => {
   const periodo = PERIODOS.find(p => p.id === periodoId);
   if (!periodo) return null;
 
+  // Para el año de Inscripción 2027: si el alumno ya tiene una inscripción
+  // registrada, el precio de las cuotas mensuales se calcula con el curso
+  // al que se inscribió (cursoDestinoId), no con el curso de 2026 -- ese no
+  // cambia hasta que el alumno pase de curso de verdad. La matrícula (tipo
+  // INSCRIPCION) no depende del curso, así que no le afecta esto.
+  const inscripcion2027 = anio === ANIO_INSCRIPCION_NUEVA
+    ? (ctx.inscripciones2027 || []).find(i => i.alumnoId === alumno.id)
+    : null;
+  const cursoIdEfectivo = inscripcion2027 ? inscripcion2027.cursoDestinoId : alumno.cursoId;
+
   const ref = periodoReferencia(periodoId, anio);
   // Fecha del 1° del periodo (para buscar precio vigente)
   const fechaInicioPeriodo = `${anio}-${String(ref.mes).padStart(2, '0')}-01`;
@@ -455,7 +465,7 @@ const calcularCuota = (alumno, periodoId, anio, ctx) => {
   } else {
     // Mensual y Examen usan el precio MENSUAL vigente
     // (el Examen toma el precio de Diciembre del año del período)
-    precio = buscarPrecioVigente(preciosCuotas, alumno.cursoId, 'MENSUAL', fechaInicioPeriodo);
+    precio = buscarPrecioVigente(preciosCuotas, cursoIdEfectivo, 'MENSUAL', fechaInicioPeriodo);
     if (!precio) return { error: 'Sin precio configurado para este curso/periodo' };
   }
   let efectivoBase = precio.efectivo;
@@ -597,6 +607,22 @@ const obtenerEstadoCuota = (pagos, alumnoId, periodoId, anio) => {
 // Año sobre el que se muestra la "deuda" en el listado de Alumnos y en el
 // resumen de Ver cuotas (la funcionalidad "Deuda 2026").
 const ANIO_DEUDA_ACTUAL = 2026;
+// Año sobre el que se arma la pestaña "Inscripción 2027" (búsqueda, alta de
+// alumno nuevo, matrícula y listado de inscriptos).
+const ANIO_INSCRIPCION_NUEVA = 2027;
+
+// Orden real de progresión de niveles del instituto, usado una sola vez
+// para sugerir el "curso siguiente" de cada curso que todavía no lo tenga
+// cargado (se puede corregir a mano en Cursos en cualquier momento; una
+// vez cargado, no se vuelve a tocar).
+const ORDEN_CURSOS_SUGERIDO = [
+  'Kinder', 'Prekids', 'Kids',
+  '1st Form', '2nd Form',
+  '1st Teens', '2nd Teens', '3rd Teens',
+  '4th Adults', '5th Adults', '6th Adults',
+  'FCE',
+  'Adults 1', 'Adults 1B/2', 'Adults 2', 'Adults 3', 'Adults 4'
+];
 
 // Deuda de cuotas MENSUALES de un alumno en un año: suma el saldo de las
 // cuotas parciales y el precio vigente de las pendientes. Reutiliza
@@ -662,9 +688,22 @@ export default function App() {
 
   // Migración: los cursos guardados sin mesesExcluidos pasan a tener la lista vacía
   const aplicarMigraciones = (saved) => {
-    const cursosActualizados = (saved.cursos || []).map(c =>
+    const cursosConMeses = (saved.cursos || []).map(c =>
       c.mesesExcluidos ? c : { ...c, mesesExcluidos: [] }
     );
+    // Migración: sugerir el curso siguiente según el orden conocido del
+    // instituto, solo para los cursos que todavía no tienen nada cargado
+    // en cursoSiguienteId (ni siquiera "ninguno" = null). Si ya lo tiene,
+    // no se toca -- así una corrección manual nunca se pisa.
+    const porNombre = {};
+    cursosConMeses.forEach(c => { porNombre[c.nombre] = c; });
+    const cursosActualizados = cursosConMeses.map(c => {
+      if (c.cursoSiguienteId !== undefined) return c;
+      const idx = ORDEN_CURSOS_SUGERIDO.indexOf(c.nombre);
+      const siguienteNombre = idx >= 0 ? ORDEN_CURSOS_SUGERIDO[idx + 1] : undefined;
+      const siguiente = siguienteNombre ? porNombre[siguienteNombre] : null;
+      return { ...c, cursoSiguienteId: siguiente ? siguiente.id : null };
+    });
     return { ...initialState, ...saved, cursos: cursosActualizados };
   };
 
@@ -3485,8 +3524,16 @@ function AlumnoForm({ alumno, data, update, onSave, onClose }) {
 // ver el estado de cada cuota (con fecha y método de pago al ver el detalle)
 // y cobrar directamente, reutilizando los mismos componentes de Pagos.
 function AlumnoCuotasModal({ alumno, data, update, onClose, onEdit, guardarPagosNuevos, borrarPagoDelServidor, anioInicial }) {
-  const curso = data.cursos.find(c => c.id === alumno.cursoId);
+  const cursoActual = data.cursos.find(c => c.id === alumno.cursoId);
   const [anio, setAnio] = useState(anioInicial || new Date().getFullYear());
+  // En el año de Inscripción 2027, si el alumno ya está inscripto, la
+  // grilla de cuotas (y el precio, en calcularCuota) usan el curso al que
+  // se inscribió -- no el de 2026, que no cambia hasta que arranque el
+  // año de verdad.
+  const inscripcion2027 = data.inscripciones2027.find(i => i.alumnoId === alumno.id);
+  const curso = (anio === ANIO_INSCRIPCION_NUEVA && inscripcion2027)
+    ? (data.cursos.find(c => c.id === inscripcion2027.cursoDestinoId) || cursoActual)
+    : cursoActual;
   const [selectedPeriodos, setSelectedPeriodos] = useState([]);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showCalcularModal, setShowCalcularModal] = useState(false);
@@ -4725,8 +4772,6 @@ function CajaTab({ data, update, guardarConteoNuevo }) {
 // ============================================================
 // INSCRIPCIÓN 2027 TAB
 // ============================================================
-const ANIO_INSCRIPCION_NUEVA = 2027;
-
 function Inscripcion2027Tab({ data, update, guardarInscripcionNueva, borrarInscripcionDelServidor, guardarPagosNuevos, borrarPagoDelServidor }) {
   const [subTab, setSubTab] = useState('nueva'); // 'nueva' | 'listado'
   const [query, setQuery] = useState('');
@@ -4770,7 +4815,11 @@ function Inscripcion2027Tab({ data, update, guardarInscripcionNueva, borrarInscr
   const elegirAlumno = (a) => {
     setAlumnoSeleccionadoId(a.id);
     setCargandoNuevo(false);
-    setCursoDestinoId(a.cursoId || '');
+    // Default: el curso siguiente sugerido (configurado en Cursos); si no
+    // tiene uno cargado, se deja el mismo curso actual como punto de
+    // partida. Siempre se puede cambiar en el selector de abajo.
+    const cursoActual = data.cursos.find(c => c.id === a.cursoId);
+    setCursoDestinoId(cursoActual?.cursoSiguienteId || a.cursoId || '');
     setMensajeEditadoManualmente(false);
     setGuardada(null);
   };
@@ -5003,6 +5052,9 @@ function Inscripcion2027Tab({ data, update, guardarInscripcionNueva, borrarInscr
                 {!cargandoNuevo && alumnoSeleccionado && (
                   <div className="text-xs text-cream-500">
                     Curso {ANIO_DEUDA_ACTUAL} actual: <span className="font-medium text-cream-800">{cursoOrigen?.nombre || 'Sin curso'}</span>
+                    {cursoOrigen?.cursoSiguienteId && (
+                      <> · sugerido para {ANIO_INSCRIPCION_NUEVA}: <span className="font-medium text-cream-800">{cursosActivos.find(c => c.id === cursoOrigen.cursoSiguienteId)?.nombre || '—'}</span></>
+                    )}
                   </div>
                 )}
 
@@ -5345,7 +5397,7 @@ function CursosTab({ data, update }) {
         <PriceEditorModal curso={editingPriceFor} data={data} onSave={guardarPrecios} onClose={() => setEditingPriceFor(null)} />
       )}
       {editingCurso && (
-        <CursoFormModal curso={editingCurso.id ? editingCurso : null} onSave={guardarCurso} onClose={() => setEditingCurso(null)} />
+        <CursoFormModal curso={editingCurso.id ? editingCurso : null} data={data} onSave={guardarCurso} onClose={() => setEditingCurso(null)} />
       )}
       {showBulkPrice && (
         <BulkPriceUpdateModal data={data} onSave={guardarPreciosMasivo} onClose={() => setShowBulkPrice(false)} />
@@ -5675,11 +5727,12 @@ function BulkPriceUpdateModal({ data, onSave, onClose }) {
   );
 }
 
-function CursoFormModal({ curso, onSave, onClose }) {
+function CursoFormModal({ curso, data, onSave, onClose }) {
   const [nombre, setNombre] = useState(curso?.nombre || '');
   const [horarios, setHorarios] = useState(curso?.horarios || []);
   const [nuevoHorario, setNuevoHorario] = useState('');
   const [mesesExcluidos, setMesesExcluidos] = useState(curso?.mesesExcluidos || []);
+  const [cursoSiguienteId, setCursoSiguienteId] = useState(curso?.cursoSiguienteId || '');
 
   const toggleMes = (periodoId) => {
     setMesesExcluidos(prev =>
@@ -5767,10 +5820,25 @@ function CursoFormModal({ curso, onSave, onClose }) {
             </div>
           </div>
 
+          <div>
+            <label className="text-xs text-cream-500 font-medium uppercase tracking-wider">Curso siguiente</label>
+            <p className="text-xs text-cream-400 mt-0.5 mb-2">Al inscribir un alumno de este curso para el año que viene, se va a sugerir este como destino (se puede cambiar igual en el momento).</p>
+            <select
+              value={cursoSiguienteId}
+              onChange={e => setCursoSiguienteId(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-cream-200 bg-white text-sm"
+            >
+              <option value="">— Ninguno (curso final) —</option>
+              {(data?.cursos || []).filter(c => c.id !== curso?.id).map(c => (
+                <option key={c.id} value={c.id}>{c.nombre}</option>
+              ))}
+            </select>
+          </div>
+
           <div className="flex gap-2 pt-4 border-t border-cream-200">
             <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-lg border border-cream-200 hover:bg-cream-50 font-medium text-sm">Cancelar</button>
             <button
-              onClick={() => onSave({ ...(curso || {}), nombre, horarios, mesesExcluidos })}
+              onClick={() => onSave({ ...(curso || {}), nombre, horarios, mesesExcluidos, cursoSiguienteId: cursoSiguienteId || null })}
               disabled={!nombre.trim()}
               className="flex-1 px-4 py-2.5 rounded-lg bg-gradient-to-b from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 shadow-md shadow-brand-600/25 text-white font-medium text-sm disabled:opacity-50"
             >
