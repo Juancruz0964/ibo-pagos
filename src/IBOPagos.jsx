@@ -2111,6 +2111,20 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
       return `Hola ${nombreContacto}! Te confirmamos la inscripción ${ANIO_INSCRIPCION_NUEVA} a nombre de ${fullName(alumno)} en ${inst}, abonada en su totalidad: ${fmtMoney(it.monto)}. ¡Muchas gracias!`;
     }
 
+    // Mensaje propio para el derecho de examen (no usa las plantillas
+    // configurables de las cuotas mensuales): es un derecho, no una cuota,
+    // así que "la cuota de examen" no corresponde.
+    if (items.length === 1 && items[0].periodo.id === 'EXAM') {
+      const it = items[0];
+      if (it.modalidad === 'parcial') {
+        return `Hola ${nombreContacto}! Recibimos un pago parcial de ${fmtMoney(it.monto)} para el derecho de examen de ${fullName(alumno)} en ${inst}. Saldo pendiente: ${fmtMoney(it.saldoRestante)}. ¡Gracias!`;
+      }
+      if (it.modalidad === 'saldo') {
+        return `Hola ${nombreContacto}! Confirmamos el pago del saldo pendiente del derecho de examen de ${fullName(alumno)} en ${inst} (${fmtMoney(it.monto)}). ¡Derecho de examen saldado! Gracias.`;
+      }
+      return `Hola ${nombreContacto}! Confirmamos el pago del derecho de examen de ${fullName(alumno)} en ${inst} por ${fmtMoney(it.monto)}. ¡Muchas gracias!`;
+    }
+
     const totalesItems = items.filter(it => it.modalidad === 'total');
     const parciales = items.filter(it => it.modalidad === 'parcial');
     const saldos = items.filter(it => it.modalidad === 'saldo');
