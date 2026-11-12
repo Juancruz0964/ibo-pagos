@@ -704,7 +704,21 @@ export default function App() {
       const siguiente = siguienteNombre ? porNombre[siguienteNombre] : null;
       return { ...c, cursoSiguienteId: siguiente ? siguiente.id : null };
     });
-    return { ...initialState, ...saved, cursos: cursosActualizados };
+
+    // Corrección: los alumnos nuevos cargados desde "Inscripción 2027" antes
+    // de este arreglo quedaron sin fecha de alta, así que figuraban
+    // debiendo todas las cuotas de 2026 aunque nunca fueron alumnos de ese
+    // año. Se detectan por su inscripción 2027 con cursoOrigenId null (así
+    // se marcan los alumnos nuevos, nunca los que ya existían) y, solo si
+    // todavía no tienen fecha de alta cargada, se les pone 1/1/2027.
+    const idsAlumnosNuevos2027 = new Set(
+      (saved.inscripciones2027 || []).filter(i => i.cursoOrigenId === null).map(i => i.alumnoId)
+    );
+    const alumnosActualizados = (saved.alumnos || []).map(a =>
+      (idsAlumnosNuevos2027.has(a.id) && !a.fechaAlta) ? { ...a, fechaAlta: `${ANIO_INSCRIPCION_NUEVA}-01-01` } : a
+    );
+
+    return { ...initialState, ...saved, cursos: cursosActualizados, alumnos: alumnosActualizados };
   };
 
   useEffect(() => {
