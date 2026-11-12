@@ -2178,8 +2178,9 @@ function PaymentModal({ data, update, selectedPeriodos, onClose, onConfirm }) {
       });
       const creditoUsado = totalesItems.reduce((s, it) => s + (it.creditoAplicado || 0), 0);
       const extraDejado = totalesItems.reduce((s, it) => s + (it.extraAFavor || 0), 0);
-      if (creditoUsado > 0) mensaje += ` (se descontaron ${fmtMoney(creditoUsado)} de saldo a favor)`;
-      if (extraDejado > 0) mensaje += ` (quedan ${fmtMoney(extraDejado)} a favor para el próximo mes)`;
+      const precioCuota = totalesItems.reduce((s, it) => s + (it.precioTotal || 0), 0);
+      if (creditoUsado > 0) mensaje += ` (cuota ${fmtMoney(precioCuota)}, se descontaron ${fmtMoney(creditoUsado)} de saldo a favor)`;
+      if (extraDejado > 0) mensaje += ` (cuota ${fmtMoney(precioCuota)} + ${fmtMoney(extraDejado)} que quedan a favor para el próximo mes)`;
       partes.push(mensaje);
     }
 
