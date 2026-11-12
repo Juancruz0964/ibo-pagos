@@ -4882,6 +4882,11 @@ function Inscripcion2027Tab({ data, update, guardarInscripcionNueva, borrarInscr
         nombre: nuevoForm.nombre.trim(), apellido: nuevoForm.apellido.trim(), dni: nuevoForm.dni.trim(), celular: nuevoForm.celular.trim(),
         celularAlternativo: '', contactoNombre: '', fechaNacimiento: '',
         id: uid(), cursoId: cursoDestinoId, horarioCurso: '', grupoFamiliarId: null, activo: true, observaciones: '',
+        // No es alumno de 2026 -- recién arranca en 2027. Sin esto, figuraría
+        // debiendo todas las cuotas de 2026 (como cualquier alumno activo sin
+        // fecha de alta, que por default se asume que corresponden desde el
+        // inicio del año).
+        fechaAlta: `${ANIO_INSCRIPCION_NUEVA}-01-01`,
         creadoEn: today(), creadoHora: horaActual()
       };
       update({ alumnos: [...data.alumnos, alumno] });
