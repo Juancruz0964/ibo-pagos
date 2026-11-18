@@ -5333,6 +5333,7 @@ function CursosTab({ data, update }) {
   const [editingPriceFor, setEditingPriceFor] = useState(null);
   const [editingCurso, setEditingCurso] = useState(null);
   const [showBulkPrice, setShowBulkPrice] = useState(false);
+  const [showListado, setShowListado] = useState(false);
 
   const guardarPrecios = (cursoId, precios, vigenciaDesde) => {
     // Crear nuevos registros (no modificar los anteriores)
@@ -5374,6 +5375,9 @@ function CursosTab({ data, update }) {
           <p className="text-sm text-cream-500 mt-0.5">Los precios se guardan con vigencia: actualizar precios no modifica cuotas anteriores</p>
         </div>
         <div className="flex gap-2">
+          <button onClick={() => setShowListado(true)} className="border border-cream-300 text-cream-700 hover:bg-cream-50 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
+            <Users size={16} /> Listado por curso
+          </button>
           <button onClick={() => setShowBulkPrice(true)} className="border border-brand-600 text-brand-600 hover:bg-brand-50 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
             <DollarSign size={16} /> Actualizar precios (todos los niveles)
           </button>
@@ -5436,6 +5440,94 @@ function CursosTab({ data, update }) {
       {showBulkPrice && (
         <BulkPriceUpdateModal data={data} onSave={guardarPreciosMasivo} onClose={() => setShowBulkPrice(false)} />
       )}
+      {showListado && (
+        <ListadoPorCursoModal data={data} onClose={() => setShowListado(false)} />
+      )}
+    </div>
+  );
+}
+
+// Listado de todos los alumnos (activos e inactivos) agrupado por curso,
+// para pasarle a alguien el nombre/DNI de cada curso (ej: para boletines).
+// Se puede copiar como texto o descargar como CSV (se abre bien en Excel).
+function ListadoPorCursoModal({ data, onClose }) {
+  const [copiado, setCopiado] = useState(false);
+
+  const grupos = useMemo(() => {
+    const porCurso = {};
+    data.alumnos.forEach(a => {
+      const curso = data.cursos.find(c => c.id === a.cursoId);
+      const nombreCurso = curso?.nombre || 'Sin curso';
+      if (!porCurso[nombreCurso]) porCurso[nombreCurso] = [];
+      porCurso[nombreCurso].push(a);
+    });
+    return Object.keys(porCurso).sort().map(nombreCurso => ({
+      curso: nombreCurso,
+      alumnos: porCurso[nombreCurso].slice().sort((a, b) => fullName(a).localeCompare(fullName(b)))
+    }));
+  }, [data.alumnos, data.cursos]);
+
+  const textoPlano = () => grupos.map(g =>
+    `${g.curso}\n${g.alumnos.map(a => `- ${fullName(a)} — DNI ${a.dni || 'sin DNI'}${!a.activo ? ' (inactivo)' : ''}`).join('\n')}`
+  ).join('\n\n');
+
+  const copiar = () => {
+    navigator.clipboard?.writeText(textoPlano());
+    setCopiado(true);
+    setTimeout(() => setCopiado(false), 2000);
+  };
+
+  const descargar = () => {
+    const filas = [['Curso', 'Apellido', 'Nombre', 'DNI', 'Activo']];
+    grupos.forEach(g => {
+      g.alumnos.forEach(a => {
+        filas.push([g.curso, a.apellido || '', a.nombre || '', a.dni || '', a.activo ? 'Sí' : 'No']);
+      });
+    });
+    const csv = filas.map(fila => fila.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `listado-alumnos-${today()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-white rounded-2xl max-w-xl w-full my-8 max-h-[85vh] flex flex-col">
+        <div className="border-b border-cream-200 px-6 py-4 flex items-center justify-between shrink-0">
+          <div>
+            <h2 className="font-semibold">Listado de alumnos por curso</h2>
+            <p className="text-xs text-cream-500 mt-0.5">Incluye activos e inactivos</p>
+          </div>
+          <button onClick={onClose}><X size={20} /></button>
+        </div>
+        <div className="p-6 overflow-y-auto space-y-5">
+          {grupos.map(g => (
+            <div key={g.curso}>
+              <div className="font-display text-sm font-semibold text-cream-900 mb-1.5">{g.curso} · {g.alumnos.length}</div>
+              <div className="space-y-1">
+                {g.alumnos.map(a => (
+                  <div key={a.id} className={`text-sm flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg bg-cream-50 ${!a.activo ? 'opacity-60' : ''}`}>
+                    <span>{fullName(a)}</span>
+                    <span className="text-xs text-cream-500">DNI {a.dni || 'sin DNI'}{!a.activo ? ' · Inactivo' : ''}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="border-t border-cream-200 p-4 flex gap-2 shrink-0">
+          <button onClick={copiar} className="flex-1 px-4 py-2.5 rounded-lg border border-cream-200 hover:bg-cream-50 font-medium text-sm">
+            {copiado ? '✓ Copiado' : 'Copiar texto'}
+          </button>
+          <button onClick={descargar} className="flex-1 px-4 py-2.5 rounded-lg bg-gradient-to-b from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 shadow-md shadow-brand-600/25 text-white font-medium text-sm flex items-center justify-center gap-2">
+            <Download size={16} /> Descargar (Excel)
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
