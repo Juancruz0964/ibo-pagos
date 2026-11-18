@@ -5452,10 +5452,12 @@ function CursosTab({ data, update }) {
 // Se puede copiar como texto o descargar como CSV (se abre bien en Excel).
 function ListadoPorCursoModal({ data, onClose }) {
   const [copiado, setCopiado] = useState(false);
+  const [incluirInactivos, setIncluirInactivos] = useState(true);
 
   const grupos = useMemo(() => {
     const porCurso = {};
     data.alumnos.forEach(a => {
+      if (!incluirInactivos && !a.activo) return;
       const curso = data.cursos.find(c => c.id === a.cursoId);
       const nombreCurso = curso?.nombre || 'Sin curso';
       if (!porCurso[nombreCurso]) porCurso[nombreCurso] = [];
@@ -5465,7 +5467,7 @@ function ListadoPorCursoModal({ data, onClose }) {
       curso: nombreCurso,
       alumnos: porCurso[nombreCurso].slice().sort((a, b) => fullName(a).localeCompare(fullName(b)))
     }));
-  }, [data.alumnos, data.cursos]);
+  }, [data.alumnos, data.cursos, incluirInactivos]);
 
   const textoPlano = () => grupos.map(g =>
     `${g.curso}\n${g.alumnos.map(a => `- ${fullName(a)} — DNI ${a.dni || 'sin DNI'}${!a.activo ? ' (inactivo)' : ''}`).join('\n')}`
@@ -5500,7 +5502,10 @@ function ListadoPorCursoModal({ data, onClose }) {
         <div className="border-b border-cream-200 px-6 py-4 flex items-center justify-between shrink-0">
           <div>
             <h2 className="font-semibold">Listado de alumnos por curso</h2>
-            <p className="text-xs text-cream-500 mt-0.5">Incluye activos e inactivos</p>
+            <label className="text-xs text-cream-500 mt-0.5 flex items-center gap-1.5 cursor-pointer">
+              <input type="checkbox" checked={incluirInactivos} onChange={e => setIncluirInactivos(e.target.checked)} className="rounded" />
+              Incluir inactivos
+            </label>
           </div>
           <button onClick={onClose}><X size={20} /></button>
         </div>
