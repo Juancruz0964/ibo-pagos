@@ -5480,13 +5480,16 @@ function ListadoPorCursoModal({ data, onClose }) {
   };
 
   const descargar = () => {
-    const filas = [['Curso', 'Apellido', 'Nombre', 'DNI', 'Activo']];
+    // Separador ";" (no ",") porque el Excel en español/Argentina usa la
+    // coma como separador decimal, y con "," como separador de columnas
+    // termina metiendo todo en una sola celda en vez de abrir prolijo.
+    const filas = [['Curso', 'Nombre', 'Apellido', 'DNI']];
     grupos.forEach(g => {
       g.alumnos.forEach(a => {
-        filas.push([g.curso, a.apellido || '', a.nombre || '', a.dni || '', a.activo ? 'Sí' : 'No']);
+        filas.push([g.curso, a.nombre || '', a.apellido || '', a.dni || '']);
       });
     });
-    const csv = filas.map(fila => fila.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const csv = filas.map(fila => fila.map(v => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\n');
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
